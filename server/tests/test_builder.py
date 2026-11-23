@@ -92,7 +92,9 @@ def test_cancel_kills_the_tree(app, lesson, tmp_path):
     job = Job("jc", "test", "student", "o", "s", "lesson0", 1, tmp_path / "jc", class_name="HelloWorld")
     t = threading.Thread(target=rt.service.execute, args=(job, src, lesson))
     t.start()
-    time.sleep(2)
+    end = time.time() + 30
+    while "Running the tests" not in job.output and t.is_alive() and time.time() < end:
+        time.sleep(0.05)
     job.cancel.set()
     t.join(10)
     assert not t.is_alive() and job.status == "cancelled"

@@ -20,7 +20,8 @@ EXIT = STARTER.replace('// TODO: log "Hello, world!"', 'System.exit(3);')
 @pytest.fixture
 def env(tmp_path):
     return {"ROBOTICS_DATA_DIR": str(tmp_path / "data"), "BUILD_TIMEOUT_SEC": "4",
-            "BUILD_MAX_OUTPUT_KB": "32", "BUILD_MAX_HEAP_MB": "128"}
+            "BUILD_MAX_OUTPUT_KB": "32", "BUILD_MAX_HEAP_MB": "128",
+            "PASSWORD_HASH_METHOD": "pbkdf2:sha256:1000"}
 
 
 @pytest.fixture
@@ -46,6 +47,15 @@ class Api:
 
     def login(self, user, pw, status=200):
         return self.post("/api/login", {"username": user, "password": pw}, status)
+
+    def wait_running_tests(self, jid, timeout=30):
+        end = time.time() + timeout
+        while time.time() < end:
+            j = self.get(f"/api/jobs/{jid}")
+            if "Running the tests" in j.get("output", "") or j["status"] != "running":
+                return j
+            time.sleep(0.05)
+        raise AssertionError("job never reached the test run")
 
     def wait_job(self, jid, timeout=30):
         end = time.time() + timeout

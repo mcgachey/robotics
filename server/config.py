@@ -28,6 +28,7 @@ class Config:
     javac: str = "javac"
     java: str = "java"
     session_cookie_secure: bool = False
+    password_hash_method: str = "pbkdf2:sha256"
     extra: dict = field(default_factory=dict)
 
     @property
@@ -85,5 +86,6 @@ def load_config(overrides: dict | None = None) -> Config:
         max_heap_mb=num("BUILD_MAX_HEAP_MB", 256),
         max_output_kb=num("BUILD_MAX_OUTPUT_KB", 256),
         max_concurrent_jobs=num("MAX_CONCURRENT_JOBS", 2),
+        password_hash_method=env.get("PASSWORD_HASH_METHOD", "pbkdf2:sha256"),
         javac=env.get("JAVAC", "javac"), java=env.get("JAVA", "java"),
     )

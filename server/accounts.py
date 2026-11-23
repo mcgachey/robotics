@@ -9,8 +9,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .storage import lock_for, read_json, write_json
 
 LOGIN_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
-_HASH_METHOD = "pbkdf2:sha256"
-_DUMMY_HASH = generate_password_hash("not-a-password", method=_HASH_METHOD)
+DEFAULT_HASH_METHOD = "pbkdf2:sha256"  # werkzeug default iteration count (deliberately slow)
 
 
 class AccountError(ValueError):
@@ -26,8 +25,10 @@ def _check_password(pw: object) -> str:
 
 
 class Accounts:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, hash_method: str = DEFAULT_HASH_METHOD):
         self.data_dir = Path(data_dir)
+        self.hash_method = hash_method
+        self._dummy_hash = None
         self.teacher_file = self.data_dir / "teacher.json"
         self.students_dir = self.data_dir / "students"
 
@@ -46,7 +47,7 @@ class Accounts:
             if self.find_student_by_login(login):
                 raise AccountError("That username is used by a student.")
             rec = {"id": "teacher", "login": login, "name": name,
-                   "passwordHash": generate_password_hash(password, method=_HASH_METHOD)}
+                   "passwordHash": generate_password_hash(password, method=self.hash_method)}
             write_json(self.teacher_file, rec)
         return rec
 
@@ -90,7 +91,7 @@ class Accounts:
                 raise AccountError("That username is already taken.")
             sid = "s" + secrets.token_hex(4)
             rec = {"id": sid, "name": name, "login": login, "enabled": True,
-                   "passwordHash": generate_password_hash(password, method=_HASH_METHOD)}
+                   "passwordHash": generate_password_hash(password, method=self.hash_method)}
             write_json(self.students_dir / sid / "student.json", rec)
         return rec
 
@@ -104,7 +105,7 @@ class Accounts:
                     raise AccountError("'enabled' must be true or false.")
                 rec["enabled"] = enabled
             if password is not None:
-                rec["passwordHash"] = generate_password_hash(_check_password(password), method=_HASH_METHOD)
+                rec["passwordHash"] = generate_password_hash(_check_password(password), method=self.hash_method)
             if name is not None:
                 name = str(name).strip()
                 if not name or len(name) > 80:
@@ -112,6 +113,11 @@ class Accounts:
                 rec["name"] = name
             write_json(self.students_dir / student_id / "student.json", rec)
         return rec
+
+    def _dummy(self) -> str:
+        if self._dummy_hash is None:
+            self._dummy_hash = generate_password_hash("not-a-password", method=self.hash_method)
+        return self._dummy_hash
 
     # --- login -----------------------------------------------------------
     def authenticate(self, login: str, password: str) -> tuple[str, dict] | None:
@@ -124,7 +130,7 @@ class Accounts:
             return ("teacher", teacher) if check_password_hash(teacher["passwordHash"], password) else None
         rec = self.find_student_by_login(login)
         if not rec:
-            check_password_hash(_DUMMY_HASH, password)  # keep timing similar
+            check_password_hash(self._dummy(), password)  # keep timing similar
             return None
         if check_password_hash(rec["passwordHash"], password) and rec.get("enabled", True):
             return ("student", rec)

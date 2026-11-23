@@ -36,7 +36,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     )
 
     lessons = Lessons(cfg.data_dir)
-    accounts = Accounts(cfg.data_dir)
+    accounts = Accounts(cfg.data_dir, cfg.password_hash_method)
     projects = Projects(cfg.data_dir, lessons, cfg.max_source_kb)
     service = BuildService(cfg, lessons)
     jobs = JobManager(cfg, service)

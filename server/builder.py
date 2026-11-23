@@ -1,7 +1,9 @@
 """The build service: compile student code and run lesson tests, each in a limited child process (D6)."""
+import hashlib
 import json
 import os
 import shutil
+import threading
 import zipfile
 from pathlib import Path
 
@@ -51,7 +53,8 @@ class BuildService:
         return self.cfg.timeout_sec, self.cfg.max_output_kb * 1024
 
     def _jvm_flags(self) -> list[str]:
-        return [f"-Xmx{self.cfg.max_heap_mb}m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Xshare:auto"]
+        return [f"-Xmx{self.cfg.max_heap_mb}m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Xshare:auto",
+                "-XX:-UsePerfData"]  # no hsperfdata mmap file: faster JVM start, nothing to clean up
 
     def _javac(self, job: Job, args: list[str]) -> ProcResult:
         timeout, cap = self._limits()
@@ -118,31 +121,67 @@ class BuildService:
         return jar
 
     # --- test ------------------------------------------------------------
+    def _tests_key(self, files: list[Path]) -> str:
+        h = hashlib.sha256()
+        for f in files:
+            h.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
+        for p in (self.cfg.api_jar, self.cfg.junit_jar, self.cfg.hamcrest_jar):
+            try:
+                st = p.stat()
+                h.update(f"{p}:{st.st_size}:{st.st_mtime_ns}".encode())
+            except OSError:
+                pass
+        return h.hexdigest()[:32]
+
+    @staticmethod
+    def _publish_tests(built: Path, cached: Path) -> None:
+        """Best-effort atomic copy of freshly compiled test classes into the shared cache."""
+        tmp = cached.with_name(f"{cached.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(built, tmp)
+            os.rename(tmp, cached)  # loses harmlessly to a concurrent publisher
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def _test(self, job: Job, lesson: dict, jar: Path) -> None:
-        tests_src, tests_out = job.dir / "tests", job.dir / "testclasses"
+        tests_src = job.dir / "tests"
         shutil.rmtree(tests_src, ignore_errors=True)
-        shutil.rmtree(tests_out, ignore_errors=True)
-        tests_src.mkdir()
-        tests_out.mkdir()
         files = sorted(self.lessons.tests_dir(lesson).glob("*.java"))
         if not files:
             job.set_result("failed", "lesson_error", "This lesson has no tests yet. Tell your teacher.")
             job.emit("status", job.message)
             return
-        for f in files:
-            shutil.copyfile(f, tests_src / f.name)
         libs = os.pathsep.join([str(jar), self.cfg.classpath_libs])
 
-        job.emit("status", "Compiling the lesson's tests")
-        r = self._javac(job, ["-cp", libs, "-d", str(tests_out)] + [str(tests_src / f.name) for f in files])
-        job.durations["testCompileMs"] = r.elapsed_ms
-        if self._killed(job, r, "compile"):
-            return
-        if r.returncode != 0:
-            job.set_result("failed", "lesson_error",
-                           "The lesson's tests did not compile, so this is not your mistake. Tell your teacher.")
-            job.emit("status", job.message)
-            return
+        # The lesson's tests only depend on the lesson's test sources and the API/JUnit jars (they are
+        # compiled against the student's classes only by name at run time), so compile them once and
+        # reuse the result for every student and job instead of paying for a second javac JVM each time.
+        key = self._tests_key(files)
+        cached = self.cfg.data_dir / "cache" / "testclasses" / key
+        tests_out = cached
+        if cached.is_dir():
+            job.emit("status", "Using the lesson's compiled tests")
+        else:
+            tests_src.mkdir()
+            for f in files:
+                shutil.copyfile(f, tests_src / f.name)
+            tests_out = job.dir / "testclasses"
+            shutil.rmtree(tests_out, ignore_errors=True)
+            tests_out.mkdir()
+            job.emit("status", "Compiling the lesson's tests")
+            r = self._javac(job, ["-cp", libs, "-d", str(tests_out)] + [str(tests_src / f.name) for f in files])
+            job.durations["testCompileMs"] = r.elapsed_ms
+            if self._killed(job, r, "compile"):
+                return
+            if r.returncode != 0:
+                job.set_result("failed", "lesson_error",
+                               "The lesson's tests did not compile, so this is not your mistake. Tell your teacher.")
+                job.emit("status", job.message)
+                return
+            self._publish_tests(tests_out, cached)
+            if cached.is_dir():
+                tests_out = cached
 
         job.emit("status", "Running the tests")
         results = job.dir / "results.json"

@@ -150,7 +150,7 @@ def test_one_active_job_per_student_and_stop(ada):
     r = ada.call("POST", "/api/me/projects/lesson0/build", {})
     assert r.status_code == 409 and "already have" in r.get_json()["error"]
     assert ada.get("/api/me/projects/lesson0")["activeJobId"] == jid
-    time.sleep(1.5)
+    ada.wait_running_tests(jid)
     ada.post(f"/api/me/jobs/{jid}/stop")
     j = ada.wait_job(jid, 10)
     assert j["status"] == "cancelled"
@@ -261,7 +261,7 @@ def test_teacher_review(teacher, ada):
 def test_running_jobs_are_marked_interrupted_on_restart(env, app, ada):
     save(ada, INFINITE)
     jid = ada.post("/api/me/projects/lesson0/test", status=202)["jobId"]
-    time.sleep(1)
+    ada.wait_running_tests(jid)
     # Simulate a crash: a new server process starts while the old build.json still says "running".
     app2 = create_app(env)
     a2 = Api(app2)
