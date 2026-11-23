@@ -130,7 +130,7 @@ cd /srv/robotics-src && sudo bin/update_rp.sh        # or: sudo bin/update_rp.sh
 
 Same optional branch argument (default `main`). It assumes `init_rp.sh` has already run. It does not install packages or change system configuration. It:
 
-1. Check that `/etc/robotics/init.env` exists and was written for the same branch. If not, stop with a message to run `init_rp.sh` with that branch (or re-image).
+1. Check that `/etc/robotics/init.env` exists. If not, stop with a message to run `init_rp.sh` (or re-image). The branch need not match init's; update checks out the requested branch and records it in `init.env`.
 2. `git fetch`, then `git reset --hard origin/<branch>`. The Pi is cattle, so local changes in the checkout are discarded.
 3. `make deps build test deploy check`: fetch pinned dependencies, build, test, install into `/opt/robotics/app`, restart the service, and run the self-check.
 
