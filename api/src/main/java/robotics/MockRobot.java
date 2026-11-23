@@ -11,6 +11,34 @@ import java.util.List;
 /** A Robot that records what a program does. Used by Test. */
 public class MockRobot implements Robot {
     private final List<String> messages = new ArrayList<String>();
+    private final MockDriveMotor leftDrive = new MockDriveMotor();
+    private final MockDriveMotor rightDrive = new MockDriveMotor();
+
+    @Override
+    public MockDriveMotor leftDrive() {
+        return leftDrive;
+    }
+
+    @Override
+    public MockDriveMotor rightDrive() {
+        return rightDrive;
+    }
+
+    /** A drive motor that just remembers its settings (power is clamped as on a real motor). */
+    public static class MockDriveMotor implements DriveMotor {
+        private double power;
+        private Direction direction = Direction.FORWARD;
+        private ZeroPowerBehavior zeroPower = ZeroPowerBehavior.UNKNOWN;
+
+        @Override public synchronized void setPower(double p) {
+            power = Math.max(-1.0, Math.min(1.0, p));
+        }
+        @Override public synchronized double getPower() { return power; }
+        @Override public synchronized void setDirection(Direction d) { direction = d; }
+        @Override public synchronized Direction getDirection() { return direction; }
+        @Override public synchronized void setZeroPowerBehavior(ZeroPowerBehavior b) { zeroPower = b; }
+        @Override public synchronized ZeroPowerBehavior getZeroPowerBehavior() { return zeroPower; }
+    }
 
     @Override
     public synchronized void log(String message) {
