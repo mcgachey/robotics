@@ -1,30 +1,36 @@
 package robotics;
 
 /**
- * One drive motor, with the same contract as the FTC SDK's {@code DcMotor} (the subset needed
- * for driving): power in [-1, 1], a direction flip, and a zero-power behaviour.
+ * One wheel motor. You get one from {@link Robot#leftDrive()} or {@link Robot#rightDrive()}.
  *
- * Like FTC, setting a power is not a one-shot move: the motor keeps running at that power until
- * the next call. Programs must set power to 0 to stop.
+ * <p>Power is a number from -1 to 1. Positive spins the wheel one way, negative spins it the
+ * other way, and 0 means stop.
+ *
+ * <p>Careful: the motor keeps spinning at the power you set until you set a new power. To make
+ * the robot stop, set the power to 0.
  */
 public interface DriveMotor {
-    /** Same meaning as FTC's DcMotor.Direction: FORWARD is the motor's natural direction. */
+    /** Which way the motor spins when the power is positive. FORWARD is the normal way. */
     enum Direction { FORWARD, REVERSE }
 
-    /** Same meaning as FTC's DcMotor.ZeroPowerBehavior. UNKNOWN is the initial value. */
+    /** What the motor does when the power is 0: BRAKE stops it quickly, FLOAT lets it coast. UNKNOWN is what you get before you choose. */
     enum ZeroPowerBehavior { UNKNOWN, BRAKE, FLOAT }
 
-    /** Set the power, clamped to [-1, 1]. Positive is the direction set by {@link #setDirection}. */
+    /** Sets how hard the motor spins, from -1 to 1. Bigger numbers than that are cut down to 1 (or -1). Positive power spins the way set by {@link #setDirection}. */
     void setPower(double power);
 
-    /** The power last set (after clamping), as FTC does. Not a measurement. */
+    /** Tells you the power you last set. It is not a measurement of how fast the wheel is really turning. */
     double getPower();
 
+    /** Chooses which way the motor spins when the power is positive. */
     void setDirection(Direction direction);
 
+    /** Tells you which direction you chose. */
     Direction getDirection();
 
+    /** Chooses what the motor does when the power is 0. */
     void setZeroPowerBehavior(ZeroPowerBehavior behavior);
 
+    /** Tells you what you chose for when the power is 0. */
     ZeroPowerBehavior getZeroPowerBehavior();
 }

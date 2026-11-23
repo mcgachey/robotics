@@ -1,46 +1,55 @@
 package robotics;
 
-/** What a program can do with a robot (apiVersion 0). */
+/**
+ * Your robot! Your program gets a Robot, and you tell it what to do by calling the methods below.
+ *
+ * <p>Some robots can do more than others. A droid can turn its head and beep. A wheeled robot
+ * (the FTC StarterBot) can drive, but it has no head and no speaker. If you ask a robot to do
+ * something it can't do, you get an {@code UnsupportedOperationException} (that is Java's way of
+ * saying "this robot can't do that").
+ */
 public interface Robot {
-    /** Hello world output goes here. */
+    /** Writes a message so you can read it. Use this for your "Hello, world!" program. */
     void log(String message);
 
     /**
-     * The left drive motor. On an FTC robot this is the motor configured as "left_drive".
+     * Gives you the left wheel motor. On a StarterBot this is the motor named "left_drive".
      *
-     * As on the FTC StarterBot, a program normally sets {@code rightDrive().setDirection(REVERSE)}
-     * once at the start so that positive power drives the robot forward.
+     * <p>Tip: the right motor is mounted facing the other way. At the start of your program, call
+     * {@code rightDrive().setDirection(REVERSE)}. After that, a positive power makes the robot
+     * drive forward.
      */
     DriveMotor leftDrive();
 
-    /** The right drive motor ("right_drive" on the FTC StarterBot). */
+    /** Gives you the right wheel motor. On a StarterBot this is the motor named "right_drive". */
     DriveMotor rightDrive();
 
     /**
-     * Rotate the head for a short, fixed time (1.5 seconds at a fixed speed), then stop it. Returns
-     * immediately; the droid does the turn in the background, in order with other head and beep
-     * commands. Droid only; the FTC StarterBot has no head.
+     * Turns the droid's head for a short time (1.5 seconds), then stops. Your program does not
+     * wait. It moves on to the next line while the head turns. Head and beep jobs happen one
+     * after another, in the order you gave them. Only droids have a head.
      *
-     * @param direction 1 to turn right, -1 to turn left
+     * @param direction use 1 to turn right, or -1 to turn left
      * @throws IllegalArgumentException if direction is not 1 or -1
-     * @throws UnsupportedOperationException on a robot without a head
+     * @throws UnsupportedOperationException if this robot has no head
      */
     void rotateHead(int direction);
 
     /**
-     * Return the head to the center position. Returns immediately. Droid only.
+     * Turns the droid's head back to face the front. Your program does not wait. Only droids have
+     * a head.
      *
-     * @throws UnsupportedOperationException on a robot without a head
+     * @throws UnsupportedOperationException if this robot has no head
      */
     void centerHead();
 
     /**
-     * Play one of the droid's sounds. On a droid this blocks until the sound has finished. Droid
-     * only; the FTC StarterBot has no speaker.
+     * Plays a sound. Your program waits until the sound is finished, then moves on. Only droids
+     * can beep.
      *
-     * @param sound index into the droid's personality sounds, 0 or more
-     * @throws IllegalArgumentException if {@code sound} is negative
-     * @throws UnsupportedOperationException on a robot that cannot beep
+     * @param sound which sound to play. Start with 0, then try 1, 2, 3 and so on.
+     * @throws IllegalArgumentException if sound is less than 0
+     * @throws UnsupportedOperationException if this robot cannot beep
      */
     void beep(int sound);
 }

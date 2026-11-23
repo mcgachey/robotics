@@ -154,7 +154,7 @@ export function LessonView({ lessonId }: { lessonId: string }) {
   const running = stream.running;
   const submitted = project.lastSubmit;
   return (
-    <Stack gap={0} h="calc(100vh - 52px)">
+    <Stack gap={0} h="100%">
       <Group px="md" py={6} justify="space-between" wrap="nowrap">
         <Group gap="xs">
           <Button onClick={() => start('build')} disabled={running} data-testid="build">Build</Button>
