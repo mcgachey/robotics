@@ -19,6 +19,29 @@ else
   echo "WARNING: server/requirements.txt not present; venv not updated"
 fi
 
+# Board controller: its own venv (SDK + pinned requirements), data/firmware dirs, droids.yml, env file.
+CVENV=$PREFIX/controller-venv
+if [ -d "$CACHE/controller" ]; then
+  [ -x "$CVENV/bin/pip" ] || python3 -m venv "$CVENV"
+  "$CVENV/bin/pip" install -r "$CACHE/controller/requirements.txt" "$CACHE/controller/sdk"
+  install -d -o robotics -g robotics -m 750 "${CONTROLLER_DATA:-/var/lib/robotics/controller}"
+  install -d -o robotics -g robotics -m 755 "${CONTROLLER_FIRMWARE:-/var/lib/robotics/controller/firmware}"
+  if [ ! -f "$ETC/droids.yml" ]; then
+    cp "$CACHE/controller/droids.example.yml" "$ETC/droids.yml" 2>/dev/null || printf 'droids: []\n' > "$ETC/droids.yml"
+  fi
+  chmod 644 "$ETC/droids.yml"
+  if [ ! -f "$ETC/controller.env" ]; then
+    cat > "$ETC/controller.env" <<ENV
+PORT=5050
+DATA_DIR=${CONTROLLER_DATA:-/var/lib/robotics/controller}
+FIRMWARE_DIR=${CONTROLLER_FIRMWARE:-/var/lib/robotics/controller/firmware}
+CONTROLLER_CONFIG=$ETC/droids.yml
+ENV
+  fi
+  install -m 644 systemd/robotics-controller.service /etc/systemd/system/robotics-controller.service
+  systemctl enable robotics-controller.service
+fi
+
 # Assemble the new app tree beside the old one, then swap.
 rm -rf "$NEW"; mkdir -p "$NEW/web" "$NEW/lib"
 copy() { # copy <src> <dest>; warn if the source is absent
@@ -33,6 +56,7 @@ copy "$CACHE/junit-4.13.2.jar" "$NEW/junit-4.13.2.jar"
 copy "$CACHE/hamcrest-core-1.3.jar" "$NEW/hamcrest-core-1.3.jar"
 copy lessons "$NEW/lessons"
 copy scripts "$NEW/scripts"
+copy "$CACHE/controller" "$NEW/controller"
 find "$NEW" -name __pycache__ -prune -exec rm -rf {} +
 chown -R root:root "$NEW"; chmod -R a+rX,go-w "$NEW"
 
@@ -42,6 +66,20 @@ mv "$NEW" "$APP"
 rm -rf "$APP.old"
 
 systemctl daemon-reload
+if [ -d "$APP/controller" ]; then
+  systemctl restart robotics-controller
+  CPORT=$(. "$ETC/controller.env"; echo "${PORT:-5050}")
+  up=0
+  for _ in $(seq 1 20); do
+    if curl -s --max-time 3 -o /dev/null "http://127.0.0.1:$CPORT/api/boards"; then up=1; break; fi
+    sleep 1
+  done
+  if [ "$up" -eq 1 ]; then echo "deploy ok: controller answering on port $CPORT"
+  else
+    echo "deploy FAILED: controller not answering on port $CPORT" >&2
+    journalctl -u robotics-controller -n 30 --no-pager >&2 || true; exit 1
+  fi
+fi
 # Components not on this branch yet (early phase 0): nothing to run, so don't
 # start the service (it would crash-loop) and don't smoke-check.
 if [ ! -d "$APP/server" ] || [ ! -x "$PREFIX/venv/bin/gunicorn" ]; then

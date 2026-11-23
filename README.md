@@ -12,6 +12,7 @@ Plans: `docs/plans/phase_0/` (`plan.md`, `build_server.md`).
 | `web/` | npm workspaces: `common`, `ide` (student, Monaco), `instructor` |
 | `lessons/lesson0/` | Hello World lesson: `lesson.json`, `starter/`, `tests/` |
 | `scripts/` | `deploy`, `self-check`, `acceptance-test` |
+| `deps/astromech.env` | Pinned `astromech_server` commit; `scripts/controller-build` fetches it and builds the ESP32 board controller (UI on port 5050, service `robotics-controller`) |
 | `bin/` | `init_rp.sh`, `update_rp.sh` (Pi provisioning) |
 
 ## Develop on a laptop

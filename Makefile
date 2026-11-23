@@ -37,6 +37,7 @@ $(CACHE)/hamcrest-core-1.3.jar:
 
 build:
 	@$(call each,build)
+	scripts/controller-build
 
 test:
 	@$(call each,test)

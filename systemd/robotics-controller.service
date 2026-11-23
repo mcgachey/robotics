@@ -1,0 +1,18 @@
+[Unit]
+Description=Robotics ESP32 board controller (astromech_server raspberrypi_controller)
+After=local-fs.target
+
+[Service]
+User=robotics
+Group=robotics
+# dialout: open the boards' serial ports. bluetooth: scan for droids over BlueZ.
+SupplementaryGroups=dialout bluetooth
+WorkingDirectory=/opt/robotics/app/controller/src
+EnvironmentFile=/etc/robotics/controller.env
+ExecStart=/opt/robotics/controller-venv/bin/python server.py
+Restart=on-failure
+RestartSec=2
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
