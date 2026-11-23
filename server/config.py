@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent  # the app dir when deployed, the 
 @dataclass
 class Config:
     data_dir: Path
+    lessons_dir: Path  # lesson definitions: part of the source tree, read-only
     secret_key: str
     lib_dir: Path  # where robotics-api.jar etc. live
     api_jar: Path
@@ -28,7 +29,7 @@ class Config:
     javac: str = "javac"
     java: str = "java"
     session_cookie_secure: bool = False
-    password_hash_method: str = "pbkdf2:sha256"
+    password_hash_method: str = "pbkdf2:sha256"  # tests lower the iteration count, e.g. "pbkdf2:sha256:1000"
     extra: dict = field(default_factory=dict)
 
     @property
@@ -79,7 +80,8 @@ def load_config(overrides: dict | None = None) -> Config:
             return default
 
     return Config(
-        data_dir=data_dir, secret_key=key, lib_dir=lib_dir,
+        data_dir=data_dir, lessons_dir=Path(env.get("ROBOTICS_LESSONS_DIR") or (ROOT / "lessons")).resolve(),
+        secret_key=key, lib_dir=lib_dir,
         api_jar=api, harness_jar=harness, junit_jar=junit, hamcrest_jar=hamcrest,
         web_ide=_web_dir(lib_dir, "ide"), web_teacher=_web_dir(lib_dir, "teacher"),
         timeout_sec=num("BUILD_TIMEOUT_SEC", 30),

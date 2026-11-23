@@ -1,34 +1,78 @@
-"""Lessons: lesson.json, starter/<Class>.java, tests/<Class>Test.java."""
+"""Lessons are source: lessons/<id>/{lesson.json, starter/<Class>.java, tests/<Class>Test.java} in the repo.
+
+The server only reads them. The one piece of runtime lesson state is which lessons are enabled
+(data/lessons-enabled.json); a lesson that is not listed there is disabled and hidden from students.
+"""
+from __future__ import annotations
+
+import json
+import logging
 from pathlib import Path
 
-from .storage import atomic_write_text, lock_for, read_json, valid_id, valid_java_identifier, write_json
+from .storage import atomic_write_text, lock_for, read_json, valid_id, valid_java_identifier
 
-MAX_TEXT = 100_000
+log = logging.getLogger("robotics")
 
-
-class LessonError(ValueError):
-    pass
+ENABLED_FILE = "lessons-enabled.json"
 
 
 class Lessons:
-    def __init__(self, data_dir: Path):
-        self.dir = Path(data_dir) / "lessons"
+    def __init__(self, lessons_dir: Path, data_dir: Path):
+        self.dir = Path(lessons_dir)
+        self.enabled_path = Path(data_dir) / ENABLED_FILE
+        self._warned: set[str] = set()
 
+    # --- definitions (read-only, from the source tree) -------------------------------
     def path(self, lesson_id: str) -> Path:
         return self.dir / lesson_id
 
+    def _problem(self, d: Path, m) -> str | None:
+        if not isinstance(m, dict):
+            return "lesson.json is not a JSON object"
+        if m.get("id") != d.name or not valid_id(d.name):
+            return "id must equal the directory name (lowercase letters, digits, '-')"
+        if not isinstance(m.get("title"), str) or not m["title"].strip():
+            return "missing title"
+        if not valid_java_identifier(m.get("className")):
+            return "className is not a valid Java name"
+        for k in ("targetPhase", "apiVersion"):
+            if not isinstance(m.get(k), int) or isinstance(m.get(k), bool):
+                return f"{k} must be a whole number"
+        if not (d / "starter" / f"{m['className']}.java").is_file():
+            return f"missing starter/{m['className']}.java"
+        if not (d / "tests" / f"{m['className']}Test.java").is_file():
+            return f"missing tests/{m['className']}Test.java"
+        return None
+
     def meta(self, lesson_id: str) -> dict | None:
+        """A defined lesson's metadata, whether or not it is enabled; None if undefined or invalid."""
         if not valid_id(lesson_id):
             return None
-        return read_json(self.path(lesson_id) / "lesson.json")
+        d = self.path(lesson_id)
+        try:
+            m = read_json(d / "lesson.json")
+        except (ValueError, OSError) as e:
+            m, problem = None, f"cannot read lesson.json ({e})"
+        else:
+            problem = None if m is None else self._problem(d, m)
+        if m is None and problem is None:
+            return None  # no such lesson
+        if problem:
+            if lesson_id not in self._warned:
+                self._warned.add(lesson_id)
+                log.warning("Skipping lesson %s: %s", lesson_id, problem)
+            return None
+        return m
 
     def list(self) -> list[dict]:
+        """All defined lessons (valid ones only), in id order."""
         out = []
         if self.dir.is_dir():
             for d in sorted(self.dir.iterdir()):
-                m = read_json(d / "lesson.json")
-                if m:
-                    out.append(m)
+                if d.is_dir():
+                    m = self.meta(d.name)
+                    if m:
+                        out.append(m)
         return out
 
     def starter_path(self, meta: dict) -> Path:
@@ -40,46 +84,31 @@ class Lessons:
     def test_class(self, meta: dict) -> str:
         return meta["className"] + "Test"
 
-    def full(self, lesson_id: str) -> dict | None:
-        m = self.meta(lesson_id)
-        if not m:
-            return None
-        starter = self.starter_path(m)
-        test = self.tests_dir(m) / f"{self.test_class(m)}.java"
-        return {**m,
-                "starter": starter.read_text("utf-8") if starter.exists() else "",
-                "tests": test.read_text("utf-8") if test.exists() else "",
-                "testClassName": self.test_class(m)}
+    # --- enabled state (runtime data) -------------------------------------------------
+    def enabled_ids(self) -> set[str]:
+        try:
+            d = read_json(self.enabled_path, {})
+        except (ValueError, OSError):
+            log.warning("Cannot read %s; treating every lesson as disabled", self.enabled_path)
+            return set()
+        ids = d.get("enabled") if isinstance(d, dict) else None
+        return {i for i in ids if isinstance(i, str)} if isinstance(ids, list) else set()
 
-    def save(self, lesson_id: str, title: str, class_name: str, starter: str, tests: str,
-             target_phase: int = 1, api_version: int = 0, create: bool = True) -> dict:
-        if not valid_id(lesson_id):
-            raise LessonError("The lesson id may use lowercase letters, digits and '-' (up to 40).")
-        title = (title or "").strip()
-        if not title or len(title) > 120:
-            raise LessonError("Enter a lesson title.")
-        if not valid_java_identifier(class_name):
-            raise LessonError("The class name must be a valid Java name, like HelloWorld.")
-        if not isinstance(starter, str) or not isinstance(tests, str):
-            raise LessonError("The starter code and the tests must be text.")
-        if len(starter) > MAX_TEXT or len(tests) > MAX_TEXT:
-            raise LessonError("The starter code or tests are too long.")
-        if not isinstance(target_phase, int) or not isinstance(api_version, int):
-            raise LessonError("targetPhase and apiVersion must be whole numbers.")
-        with lock_for("lessons"):
-            existing = self.meta(lesson_id)
-            if create and existing:
-                raise LessonError("A lesson with that id already exists.")
-            if not create:
-                if not existing:
-                    raise KeyError(lesson_id)
-                if existing["className"] != class_name:
-                    raise LessonError("The class name of an existing lesson cannot be changed "
-                                      "(students' projects already use it).")
-            meta = {"id": lesson_id, "title": title, "className": class_name,
-                    "targetPhase": target_phase, "apiVersion": api_version}
-            d = self.path(lesson_id)
-            atomic_write_text(d / "starter" / f"{class_name}.java", starter)
-            atomic_write_text(d / "tests" / f"{class_name}Test.java", tests)
-            write_json(d / "lesson.json", meta)  # last: the lesson exists once its files do
-        return meta
+    def is_enabled(self, lesson_id: str) -> bool:
+        return lesson_id in self.enabled_ids()
+
+    def set_enabled(self, lesson_id: str, enabled: bool) -> None:
+        if not self.meta(lesson_id):
+            raise KeyError(lesson_id)
+        with lock_for("lessons-enabled"):
+            ids = self.enabled_ids()
+            ids.add(lesson_id) if enabled else ids.discard(lesson_id)
+            atomic_write_text(self.enabled_path, json.dumps({"enabled": sorted(ids)}, indent=2) + "\n")
+
+    def list_enabled(self) -> list[dict]:
+        on = self.enabled_ids()
+        return [m for m in self.list() if m["id"] in on]
+
+    def list_with_state(self) -> list[dict]:
+        on = self.enabled_ids()
+        return [{**m, "enabled": m["id"] in on} for m in self.list()]

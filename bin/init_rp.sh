@@ -123,8 +123,8 @@ printf 'REPO=%s\nBRANCH=%s\nINITIALIZED=%s\n' "$REPO" "$BRANCH" "$(date -Is)" > 
 step "First build and deploy (update_rp.sh $BRANCH)"
 "$REPO/bin/update_rp.sh" "$BRANCH"
 
-# 9. First-install seeding
-step "Teacher account and Lesson 0"
+# 9. First-install teacher account (lessons ship with the app; the teacher enables them)
+step "Teacher account"
 cd "$REPO"
 if [ -e "$DATA/teacher.json" ]; then
   echo "teacher account already exists"
@@ -134,7 +134,6 @@ elif [ -t 0 ]; then
 else
   echo "no terminal: later run  make bootstrap-teacher USER=<name>"
 fi
-make seed-lesson0
 
 # 10. Next steps
 cat <<MSG

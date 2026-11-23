@@ -61,7 +61,7 @@ function Shell({ me, onLogout }: { me: Me; onLogout: () => void }) {
       </AppShell.Header>
       <AppShell.Main>
         {error && <Text c="red" p="md">{error}</Text>}
-        {lessons && lessons.length === 0 && <Text p="md">No lessons yet. Ask your teacher to create one.</Text>}
+        {lessons && lessons.length === 0 && <Text p="md">No lessons are available yet. Ask your teacher to enable one.</Text>}
         {lessonId && <LessonView key={lessonId} lessonId={lessonId} />}
       </AppShell.Main>
     </AppShell>

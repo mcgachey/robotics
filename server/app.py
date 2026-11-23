@@ -13,7 +13,7 @@ from .accounts import AccountError, Accounts
 from .builder import BuildService
 from .config import load_config
 from .jobs import JobBusy, JobManager, ServerBusy, load_job_dict
-from .lessons import LessonError, Lessons
+from .lessons import Lessons
 from .projects import ProjectError, Projects
 from .storage import valid_id
 
@@ -35,7 +35,7 @@ def create_app(overrides: dict | None = None) -> Flask:
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
     )
 
-    lessons = Lessons(cfg.data_dir)
+    lessons = Lessons(cfg.lessons_dir, cfg.data_dir)
     accounts = Accounts(cfg.data_dir, cfg.password_hash_method)
     projects = Projects(cfg.data_dir, lessons, cfg.max_source_kb)
     service = BuildService(cfg, lessons)
@@ -110,8 +110,9 @@ def create_app(overrides: dict | None = None) -> Flask:
         return wrapper
 
     def lesson_or_404(lid: str):
+        """A student's view: only enabled lessons exist."""
         meta = lessons.meta(lid)
-        if not meta:
+        if not meta or not lessons.is_enabled(lid):
             abort_json("No such lesson.", 404)
         return meta
 
@@ -145,11 +146,11 @@ def create_app(overrides: dict | None = None) -> Flask:
     def me():
         return jsonify({"role": g.role, "id": g.user["id"], "name": g.user["name"]})
 
-    # --- lessons (any logged-in user) -------------------------------------
+    # --- lessons (students see enabled ones only) --------------------------
     @app.get("/api/lessons")
-    @require_any
+    @require("student")
     def list_lessons():
-        return jsonify(lessons.list())
+        return jsonify(lessons.list_enabled())
 
     # --- student: projects ------------------------------------------------
     def project_view(sid: str, lid: str) -> dict:
@@ -309,38 +310,23 @@ def create_app(overrides: dict | None = None) -> Flask:
             return err(str(e), 400)
         return jsonify(accounts.public(rec))
 
-    # --- teacher: lessons ---------------------------------------------------
+    # --- teacher: lessons (defined in the repo; the teacher only enables/disables) ---
     @app.get("/api/teacher/lessons")
     @require("teacher")
     def teacher_lessons():
-        return jsonify([lessons.full(m["id"]) for m in lessons.list()])
+        return jsonify(lessons.list_with_state())
 
-    @app.get("/api/teacher/lessons/<lid>")
+    @app.patch("/api/teacher/lessons/<lid>")
     @require("teacher")
-    def teacher_lesson(lid):
-        full = lessons.full(lid)
-        return jsonify(full) if full else err("No such lesson.", 404)
-
-    def save_lesson(lid: str, create: bool):
-        d = body()
+    def patch_lesson(lid):
+        enabled = body().get("enabled")
+        if not isinstance(enabled, bool):
+            return err("Send {\"enabled\": true} or {\"enabled\": false}.", 400)
         try:
-            meta = lessons.save(lid, d.get("title"), d.get("className"), d.get("starter", ""), d.get("tests", ""),
-                                d.get("targetPhase", 1), d.get("apiVersion", 0), create=create)
+            lessons.set_enabled(lid, enabled)
         except KeyError:
             return err("No such lesson.", 404)
-        except LessonError as e:
-            return err(str(e), 400)
-        return jsonify(meta), (201 if create else 200)
-
-    @app.post("/api/teacher/lessons")
-    @require("teacher")
-    def create_lesson():
-        return save_lesson(str(body().get("id", "")), True)
-
-    @app.put("/api/teacher/lessons/<lid>")
-    @require("teacher")
-    def update_lesson(lid):
-        return save_lesson(lid, False)
+        return jsonify(next(m for m in lessons.list_with_state() if m["id"] == lid))
 
     # --- teacher: review, queue, verify --------------------------------------
     def job_summary(ref):

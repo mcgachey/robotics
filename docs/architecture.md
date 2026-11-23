@@ -136,7 +136,7 @@ A minimal browser IDE (React and Mantine, with Monaco bundled locally) with one 
 
 - Java syntax highlighting and indentation.
 - Auto-save to the student's workspace.
-- Choose a lesson to open its project (section 8).
+- Choose from the **enabled** lessons to open a project (section 8).
 - Buttons:
   - **Build**: compile only, report diagnostics.
   - **Test**: compile (if needed), then run the lesson's tests against the mock robotics API.
@@ -153,7 +153,7 @@ TODO: what Submit requires (successful Build, or passing Test).
 A browser app (React and Mantine) on the Pi, requiring a teacher login.
 
 - **Accounts**: create students, reset credentials, enable/disable.
-- **Lessons**: define lessons (starter code, tests, target phase).
+- **Lessons**: list the lessons defined in the repo, with an enable/disable button for each. Only enabled lessons are available to students. The teacher cannot create or edit lessons here (section 8).
 - **Review**: view students, their projects, source, and build/test status.
 - **Build and Test buttons**: run the same pipeline on a student's submitted code to check it before it goes on hardware.
 - **Hardware queue**: see submissions in order, with the student, lesson, and source revision.
@@ -166,11 +166,13 @@ Students cannot reach any of these functions.
 ## 8. Lessons and Workspaces
 
 - A **lesson** defines: starter code, tests, the target phase, and the API version.
+- **Lessons are source, not data.** Each lesson is a directory under `lessons/` in the repo (`lessons/<id>/`, holding its metadata, starter code, and tests), reviewed and versioned with the rest of the code. It reaches the Pi through the normal `git pull` and deploy (config time). Nothing in the running system creates or edits a lesson.
+- **Enabled/disabled** is the only lesson state kept at runtime, in the data directory, and it is set by the teacher. A lesson is available to students only while it is enabled. A newly deployed lesson starts disabled. Disabling a lesson hides it from students but deletes nothing: existing projects, builds, and queue entries are kept, and they work again when the lesson is re-enabled.
 - A student has one **project** per lesson, created from the lesson's starter on first use. A student can switch between projects and return to earlier work.
 - Each student has a unique ID and their own workspace of projects. Access is enforced server-side.
 - Work persists across browser restarts, Chromebook disconnections, and Pi reboots, and writes are safe against interruption.
 - Resetting a project to its starter requires confirmation.
-- Updating a lesson's starter does not overwrite existing student projects.
+- Updating a lesson's starter in the repo (and redeploying) does not overwrite existing student projects.
 - Source is kept in a simple, predictable filesystem layout; avoid a database server unless needed.
 
 ## 9. Student API and Runtime

@@ -1,7 +1,9 @@
+import shutil
 import time
+from pathlib import Path
 
 from server.app import create_app
-from server.tests.conftest import Api, GOOD, INFINITE, STARTER, SYNTAX_ERROR
+from server.tests.conftest import Api, GOOD, INFINITE, REPO, STARTER, SYNTAX_ERROR
 
 
 def save(a, src, lid="lesson0"):
@@ -31,8 +33,8 @@ def test_anonymous_gets_401_everywhere(app, ada):
 
 def test_student_cannot_use_teacher_routes(ada):
     for m, p in [("GET", "/api/teacher/students"), ("POST", "/api/teacher/students"), ("GET", "/api/teacher/lessons"),
-                 ("POST", "/api/teacher/lessons"), ("GET", "/api/teacher/queue"),
-                 ("PATCH", "/api/teacher/students/sabcdef01"), ("PUT", "/api/teacher/lessons/lesson0"),
+                 ("PATCH", "/api/teacher/lessons/lesson0"), ("GET", "/api/teacher/queue"),
+                 ("PATCH", "/api/teacher/students/sabcdef01"),
                  ("GET", "/api/teacher/students/sabcdef01/projects/lesson0"),
                  ("POST", "/api/teacher/queue/x_y/build"), ("POST", "/api/teacher/queue/x_y/test")]:
         assert ada.call(m, p, {}).status_code == 403, (m, p)
@@ -69,11 +71,58 @@ def test_passwords_are_hashed_on_disk(app, ada):
 # --- lessons and projects -------------------------------------------------------------
 def test_project_created_from_starter_and_starter_edits_do_not_touch_it(app, teacher, ada):
     assert ada.get("/api/me/projects/lesson0")["source"] == STARTER
-    teacher.put("/api/teacher/lessons/lesson0", {"title": "L0", "className": "HelloWorld",
-                                                 "starter": "// changed", "tests": "x"})
+    # Simulate a redeploy with a changed starter (the lesson files are source, never edited at runtime).
+    app.robotics.lessons.dir = Path(shutil.copytree(app.robotics.lessons.dir, app.robotics.cfg.data_dir / "l2"))
+    (app.robotics.lessons.dir / "lesson0" / "starter" / "HelloWorld.java").write_text("// changed")
     assert ada.get("/api/me/projects/lesson0")["source"] == STARTER
-    teacher.put("/api/teacher/lessons/lesson0", {"title": "L0", "className": "Other", "starter": "", "tests": ""}, 400)
     ada.get("/api/me/projects/nope", 404)
+
+
+def test_lessons_start_disabled_and_teacher_toggles_them(app, teacher):
+    t = teacher.get("/api/teacher/lessons")
+    assert [(l["id"], l["enabled"]) for l in t] == [("lesson0", False)]
+    teacher.post("/api/teacher/students", {"name": "Ada", "username": "ada", "password": "pw1234"}, 201)
+    ada = Api(app)
+    ada.login("ada", "pw1234")
+    assert ada.get("/api/lessons") == []
+    for m, p in [("GET", "/api/me/projects/lesson0"), ("PUT", "/api/me/projects/lesson0/source"),
+                 ("POST", "/api/me/projects/lesson0/build"), ("POST", "/api/me/projects/lesson0/test"),
+                 ("POST", "/api/me/projects/lesson0/submit")]:
+        assert ada.call(m, p, {"source": "x"}).status_code == 404, (m, p)
+    assert teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})["enabled"] is True
+    assert [l["id"] for l in ada.get("/api/lessons")] == ["lesson0"]
+    ada.get("/api/me/projects/lesson0")
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": False})
+    assert ada.get("/api/lessons") == []
+    ada.get("/api/me/projects/lesson0", 404)
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": "yes"}, 400)
+    teacher.patch("/api/teacher/lessons/nope", {"enabled": True}, 404)
+    # the choice is stored in the data directory and survives a restart
+    app2 = create_app({"ROBOTICS_DATA_DIR": str(app.robotics.cfg.data_dir)})
+    assert app2.robotics.lessons.enabled_ids() == set()
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
+    assert create_app({"ROBOTICS_DATA_DIR": str(app.robotics.cfg.data_dir)}).robotics.lessons.enabled_ids() == {"lesson0"}
+
+
+def test_disabling_keeps_student_work(app, teacher, ada):
+    save(ada, GOOD)
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": False})
+    ada.get("/api/me/projects/lesson0", 404)
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
+    assert ada.get("/api/me/projects/lesson0")["source"] == GOOD
+
+
+def test_invalid_lesson_directories_are_skipped(tmp_path):
+    from server.lessons import Lessons
+    root = tmp_path / "lessons"
+    shutil.copytree(REPO / "lessons" / "lesson0", root / "lesson0")
+    shutil.copytree(REPO / "lessons" / "lesson0", root / "wrong-name")  # id != directory name
+    (root / "broken").mkdir()
+    (root / "broken" / "lesson.json").write_text("{not json")
+    (root / "empty").mkdir()
+    ls = Lessons(root, tmp_path / "data")
+    assert [m["id"] for m in ls.list()] == ["lesson0"]
+    assert ls.meta("broken") is None and ls.meta("../lesson0") is None
 
 
 def test_other_students_cannot_see_my_work(app, teacher, ada):

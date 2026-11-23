@@ -21,7 +21,7 @@ EXIT = STARTER.replace('// TODO: log "Hello, world!"', 'System.exit(3);')
 def env(tmp_path):
     return {"ROBOTICS_DATA_DIR": str(tmp_path / "data"), "BUILD_TIMEOUT_SEC": "4",
             "BUILD_MAX_OUTPUT_KB": "32", "BUILD_MAX_HEAP_MB": "128",
-            "PASSWORD_HASH_METHOD": "pbkdf2:sha256:1000"}
+            "PASSWORD_HASH_METHOD": "pbkdf2:sha256:1000"}  # fast; production keeps the full iteration count
 
 
 @pytest.fixture
@@ -49,6 +49,7 @@ class Api:
         return self.post("/api/login", {"username": user, "password": pw}, status)
 
     def wait_running_tests(self, jid, timeout=30):
+        """Block until the job's test JVM has been launched (no fixed sleeps)."""
         end = time.time() + timeout
         while time.time() < end:
             j = self.get(f"/api/jobs/{jid}")
@@ -77,8 +78,7 @@ def teacher(app):
 
 @pytest.fixture
 def lesson0(teacher):
-    teacher.post("/api/teacher/lessons", {"id": "lesson0", "title": "Lesson 0", "className": "HelloWorld",
-                                          "starter": STARTER, "tests": TESTS}, 201)
+    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
 
 
 @pytest.fixture

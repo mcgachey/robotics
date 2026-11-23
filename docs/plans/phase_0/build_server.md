@@ -92,7 +92,7 @@ Monaco is bundled from the `monaco-editor` package, and the editor wrapper is co
     lessons/  scripts/
 /opt/node/                       # Node (build only)
 /etc/robotics/                   # server.env (port, limits, SECRET_KEY), mode 600
-/var/lib/robotics/data/          # students, lessons, workspaces, builds, queue
+/var/lib/robotics/data/          # students, lesson enabled state, workspaces, builds, queue
 /srv/robotics-src/               # git checkout of the deploy branch; the Pi builds from it (node_modules and caches live here)
 /etc/systemd/system/robotics.service   # gunicorn from /opt/robotics/app, using /opt/robotics/venv
 ```
@@ -119,7 +119,7 @@ The branch argument is optional and defaults to `main`. The scripts find the rep
 6. Install and enable the `systemd` unit. Disable `apt-daily` timers, `unattended-upgrades`, and boot waits for the network (section 6).
 7. Record the repo path and branch in `/etc/robotics/init.env`. This is how `update_rp.sh` knows init has run, and for which branch.
 8. Run `bin/update_rp.sh <branch>` for the first build and deploy.
-9. First install only (skipped if the teacher account or Lesson 0 already exist): `make bootstrap-teacher USER=...` (prompts for a password) and `make seed-lesson0`.
+9. First install only (skipped if the teacher account already exists): `make bootstrap-teacher USER=...` (prompts for a password). Lessons come from the repo and deploy with the app. The teacher enables them in the teacher app.
 10. Print instructions for the offline check (section 5).
 
 ### 4.2 Update: `bin/update_rp.sh [branch]`

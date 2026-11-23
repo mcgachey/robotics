@@ -37,7 +37,7 @@ export function StudentsTab() {
   const load = useCallback(async () => {
     try {
       setStudents(await get<Student[]>('/api/teacher/students'));
-      setLessons(await get('/api/lessons'));
+      setLessons(await get('/api/teacher/lessons'));
     } catch (e) {
       notifications.show({ color: 'red', message: errorMessage(e) });
     }

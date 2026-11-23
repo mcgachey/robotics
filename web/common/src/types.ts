@@ -54,11 +54,7 @@ export interface Lesson {
   className: string;
   targetPhase: number;
   apiVersion: number;
-}
-
-export interface LessonFull extends Lesson {
-  starter: string;
-  tests: string;
+  enabled?: boolean; // teacher API only
 }
 
 export interface ProjectState {
