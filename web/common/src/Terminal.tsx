@@ -10,7 +10,7 @@ interface Props {
   /** Called when a diagnostic is clicked, so the editor can jump to its line. */
   onGoto?: (d: Diagnostic) => void;
   height?: number | string;
-  /** Log (raw output) on the left, build/test results on the right, instead of a raw-output toggle. */
+  /** Robot log (robot.log messages) on the left, build/test results on the right, instead of a raw-output toggle. */
   split?: boolean;
 }
 
@@ -22,6 +22,11 @@ export function Terminal({ job, running, live, onGoto, height = 220, split = fal
   const rawView = (
     <Code block data-testid="raw-output" style={{ whiteSpace: 'pre-wrap' }}>
       {running ? live : (job?.output ?? live)}
+    </Code>
+  );
+  const robotLogView = (
+    <Code block data-testid="robot-log" style={{ whiteSpace: 'pre-wrap' }}>
+      {running ? '' : (job?.robotLog ?? '')}
     </Code>
   );
   const results = !running && job && (
@@ -74,8 +79,8 @@ export function Terminal({ job, running, live, onGoto, height = 220, split = fal
       {split ? (
         <SimpleGrid cols={2} spacing="xs">
           <div>
-            <Text size="xs" c="dimmed" mb={2}>Log</Text>
-            <ScrollArea h={height} type="auto">{rawView}</ScrollArea>
+            <Text size="xs" c="dimmed" mb={2}>Robot log</Text>
+            <ScrollArea h={height} type="auto">{robotLogView}</ScrollArea>
           </div>
           <div>
             <Text size="xs" c="dimmed" mb={2}>Build / test output</Text>

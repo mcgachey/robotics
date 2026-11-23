@@ -99,3 +99,9 @@ def test_cancel_kills_the_tree(app, lesson, tmp_path):
     t.join(10)
     assert not t.is_alive() and job.status == "cancelled"
     assert subprocess.run(["pgrep", "-f", str(job.dir)], capture_output=True).returncode != 0
+
+
+def test_robot_log_messages_are_captured_separately_from_stdout(run, lesson):
+    j = run(GOOD.replace('robot.log("Hello, world!");', 'robot.log("Hello, world!"); System.out.println("from student");'))
+    assert j.robot_log == "Hello, world!\n"
+    assert "Hello, world!" not in j.program_output

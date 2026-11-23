@@ -39,6 +39,8 @@ export interface Job {
   tests: TestResult[];
   output?: string;
   programOutput?: string;
+  /** Messages the program passed to robot.log(...), one per line. */
+  robotLog?: string;
 }
 
 export interface JobRef {

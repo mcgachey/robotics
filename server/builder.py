@@ -186,14 +186,20 @@ class BuildService:
         job.emit("status", "Running the tests")
         results = job.dir / "results.json"
         results.unlink(missing_ok=True)
+        robot_log = job.dir / "robot.log"
+        robot_log.unlink(missing_ok=True)
         timeout, cap = self._limits()
         cp = os.pathsep.join([str(tests_out), str(self.cfg.harness_jar), libs])
         cmd = [self.cfg.java] + self._jvm_flags() + ["-XX:+ExitOnOutOfMemoryError", "-Djava.awt.headless=true",
-               "-cp", cp, "robotics.harness.JUnitHarness", str(results), self.lessons.test_class(lesson)]
+               f"-Drobotics.logFile={robot_log}", "-cp", cp, "robotics.harness.JUnitHarness", str(results), self.lessons.test_class(lesson)]
         r = run_limited(cmd, job.dir, timeout, cap, cancel=job.cancel,
                         on_output=lambda t: job.emit("output", t), env=_env(job.dir))
         job.durations["testMs"] = r.elapsed_ms
         job.program_output = r.output
+        try:
+            job.robot_log = robot_log.read_text("utf-8", "replace")[: cap]
+        except FileNotFoundError:
+            job.robot_log = ""
         if self._killed(job, r, "tests"):
             return
         try:

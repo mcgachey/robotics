@@ -49,6 +49,7 @@ class Job:
         self.finished_at: str | None = None
         self.output = ""
         self.program_output = ""
+        self.robot_log = ""         # what the program passed to robot.log(...), one message per line
         self.cancel = threading.Event()
         self.events: list[dict] = []
         self.finished = False
@@ -100,6 +101,7 @@ class Job:
         if include_output:
             d["output"] = self.output
             d["programOutput"] = self.program_output
+            d["robotLog"] = self.robot_log
         return d
 
     def save(self) -> None:
@@ -109,6 +111,8 @@ class Job:
         atomic_write_text(self.dir / "output.log", self.output)
         if self.program_output:
             atomic_write_text(self.dir / "program-output.log", self.program_output)
+        if self.robot_log:
+            atomic_write_text(self.dir / "robot-log.txt", self.robot_log)
 
 
 def load_job_dict(builds_dir: Path, job_id: str, include_output: bool = True) -> dict | None:
@@ -118,7 +122,8 @@ def load_job_dict(builds_dir: Path, job_id: str, include_output: bool = True) ->
     if rec is None:
         return None
     if include_output:
-        for key, name in (("output", "output.log"), ("programOutput", "program-output.log")):
+        for key, name in (("output", "output.log"), ("programOutput", "program-output.log"),
+                          ("robotLog", "robot-log.txt")):
             try:
                 rec[key] = (d / name).read_text("utf-8", "replace")
             except FileNotFoundError:
