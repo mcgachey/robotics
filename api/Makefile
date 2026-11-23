@@ -35,7 +35,7 @@ DOCS_OUT := ../web/ide/public/javadoc
 JAVADOC  ?= javadoc
 docs:
 	rm -rf $(DOCS_OUT) && mkdir -p $(DOCS_OUT)
-	$(JAVADOC) -quiet -Xdoclint:all,-missing -notimestamp -noindex -nohelp -notree -nodeprecated \
+	$(JAVADOC) -quiet -Xdoclint:all,-missing -notimestamp --no-platform-links -noindex -nohelp -notree -nodeprecated \
 	    -encoding UTF-8 -docencoding UTF-8 -charset UTF-8 --release 8 \
 	    -windowtitle "Robot documentation" -doctitle "Robot documentation" \
 	    -d $(DOCS_OUT) src/main/java/robotics/Robot.java src/main/java/robotics/DriveMotor.java
