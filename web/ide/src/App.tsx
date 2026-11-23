@@ -63,7 +63,7 @@ function Shell({ me, onLogout }: { me: Me; onLogout: () => void }) {
       <AppShell.Main>
         {error && <Text c="red" p="md">{error}</Text>}
         {lessons && lessons.length === 0 && <Text p="md">No lessons are available yet. Ask your instructor to enable one.</Text>}
-        <Tabs defaultValue="code" keepMounted h="calc(100vh - 52px)" style={{ display: 'flex', flexDirection: 'column' }}>
+        <Tabs defaultValue="code" keepMounted keepMountedMode="display-none" h="calc(100vh - 52px)" style={{ display: 'flex', flexDirection: 'column' }}>
           <Tabs.List px="md">
             <Tabs.Tab value="code">Code</Tabs.Tab>
             <Tabs.Tab value="docs">Documentation</Tabs.Tab>
