@@ -22,7 +22,7 @@ JARS  := $(CACHE)/junit-4.13.2.jar $(CACHE)/hamcrest-core-1.3.jar
 # Run a target in every component that has a Makefile.
 each = for c in $(COMPONENTS); do if [ -f $$c/Makefile ]; then $(MAKE) -C $$c $(1); else echo "WARNING: $$c/Makefile not present; skipping '$(1)' for $$c"; fi; done
 
-.PHONY: deps build test deploy check run clean bootstrap-instructor
+.PHONY: deps build docs test deploy check run clean bootstrap-instructor
 
 deps: $(JARS)
 	cd $(CACHE) && sha256sum -c ../deps/checksums.txt
@@ -35,7 +35,12 @@ $(CACHE)/hamcrest-core-1.3.jar:
 	@mkdir -p $(CACHE)
 	curl -fsSL --max-time 120 -o $@.tmp $(MAVEN)/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar && mv $@.tmp $@
 
-build:
+# Javadoc for the Robot interface; the IDE's Documentation tab shows it.
+docs:
+	$(MAKE) -C api docs
+
+# docs first: the web build bundles its output.
+build: docs
 	@$(call each,build)
 	scripts/controller-build
 

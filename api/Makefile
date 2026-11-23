@@ -12,7 +12,7 @@ JFLAGS := --release 8 -Xlint:all,-options -encoding UTF-8 -proc:none
 API_SRC     := $(filter-out src/main/java/robotics/harness/%,$(wildcard src/main/java/robotics/*.java))
 HARNESS_SRC := $(wildcard src/main/java/robotics/harness/*.java)
 
-.PHONY: build test clean
+.PHONY: build test docs clean
 build: build/robotics-api.jar build/robotics-harness.jar
 
 build/robotics-api.jar: $(API_SRC)
@@ -30,5 +30,15 @@ test: build
 	$(JAVAC) $(JFLAGS) -cp "build/robotics-api.jar:$(JUNIT)" -d build/test-classes $(wildcard src/test/java/robotics/*.java)
 	$(JAVA) -cp "build/test-classes:build/robotics-api.jar:$(JUNIT)" org.junit.runner.JUnitCore robotics.MockRobotTest robotics.DroidRobotTest robotics.ControllerDroidLinkTest
 
+# Javadoc for the student-facing interfaces, served by the IDE's Documentation tab.
+DOCS_OUT := ../web/ide/public/javadoc
+JAVADOC  ?= javadoc
+docs:
+	rm -rf $(DOCS_OUT) && mkdir -p $(DOCS_OUT)
+	$(JAVADOC) -quiet -Xdoclint:all,-missing -notimestamp -noindex -nohelp -notree -nodeprecated \
+	    -encoding UTF-8 -docencoding UTF-8 -charset UTF-8 --release 8 \
+	    -windowtitle "Robot documentation" -doctitle "Robot documentation" \
+	    -d $(DOCS_OUT) src/main/java/robotics/Robot.java src/main/java/robotics/DriveMotor.java
+
 clean:
-	rm -rf build
+	rm -rf build $(DOCS_OUT)
