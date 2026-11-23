@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""Phase 0 acceptance test (plan section 7), driven entirely through the HTTP API.
+
+Starts its own throw-away server (temp data dir, random port, short build timeout), so it is safe to run on a
+dev machine or on the Pi next to the real service. Uses only the standard library. Exit status 0 = all passed.
+
+  scripts/acceptance-test            # from the repo or from /opt/robotics/app
+  ROBOTICS_PYTHON=/opt/robotics/venv/bin/python scripts/acceptance-test
+"""
+import http.cookiejar
+import json
+import os
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+PREFIX = os.environ.get("PREFIX", "/opt/robotics")
+PYTHON = (os.environ.get("ROBOTICS_PYTHON")
+          or next((str(p) for p in (ROOT / ".local/venv/bin/python", Path(PREFIX) / "venv/bin/python") if p.exists()),
+                  sys.executable))
+LESSON = ROOT / "lessons" / "lesson0"
+TIMEOUT_SEC = 5
+
+results = []
+
+
+def check(name, cond, detail=""):
+    results.append((name, bool(cond)))
+    print(f"  {'PASS' if cond else 'FAIL'}  {name}" + (f"   [{detail}]" if detail and not cond else ""), flush=True)
+    return bool(cond)
+
+
+def step(title):
+    print(f"\n== {title}", flush=True)
+
+
+class Client:
+    def __init__(self, base):
+        self.base = base
+        self.jar = http.cookiejar.CookieJar()
+        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
+
+    def req(self, method, path, body=None, timeout=20):
+        data = None if body is None else json.dumps(body).encode()
+        r = urllib.request.Request(self.base + path, data=data, method=method,
+                                   headers={"Content-Type": "application/json"} if data else {})
+        try:
+            with self.op.open(r, timeout=timeout) as resp:
+                raw = resp.read()
+                return resp.status, (json.loads(raw) if raw[:1] in (b"{", b"[") else raw.decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            raw = e.read()
+            try:
+                return e.code, json.loads(raw)
+            except ValueError:
+                return e.code, raw.decode("utf-8", "replace")
+
+    def get(self, p): return self.req("GET", p)
+    def post(self, p, b=None): return self.req("POST", p, b if b is not None else {})
+    def put(self, p, b): return self.req("PUT", p, b)
+    def patch(self, p, b): return self.req("PATCH", p, b)
+
+    def login(self, u, p):
+        return self.post("/api/login", {"username": u, "password": p})
+
+    def run_job(self, path, timeout=60):
+        code, j = self.post(path)
+        assert code == 202, f"{path} -> {code} {j}"
+        return self.wait(j["jobId"], timeout)
+
+    def wait(self, jid, timeout=60):
+        end = time.time() + timeout
+        while time.time() < end:
+            code, j = self.get(f"/api/jobs/{jid}")
+            if code == 200 and j["status"] != "running":
+                return j
+            time.sleep(0.1)
+        raise AssertionError(f"job {jid} did not finish in {timeout}s")
+
+
+class Server:
+    def __init__(self, data, secret):
+        self.data = data
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            self.port = s.getsockname()[1]
+        self.secret = secret
+        self.proc = None
+
+    @property
+    def base(self):
+        return f"http://127.0.0.1:{self.port}"
+
+    def env(self):
+        e = dict(os.environ, ROBOTICS_DATA_DIR=str(self.data), SECRET_KEY=self.secret,
+                 BUILD_TIMEOUT_SEC=str(TIMEOUT_SEC), BUILD_MAX_OUTPUT_KB="64", BUILD_MAX_HEAP_MB="128",
+                 PYTHONDONTWRITEBYTECODE="1")
+        if (ROOT / "robotics-api.jar").exists():
+            e["ROBOTICS_LIB_DIR"] = str(ROOT)
+        return e
+
+    def start(self):
+        self.log = open(self.data.parent / "server.log", "ab")
+        self.proc = subprocess.Popen(
+            [PYTHON, "-m", "flask", "--app", "server.app", "run", "--host", "127.0.0.1", "--port", str(self.port),
+             "--no-reload", "--no-debugger", "--with-threads"],
+            cwd=ROOT, env=self.env(), stdout=self.log, stderr=self.log, start_new_session=True)
+        end = time.time() + 30
+        while time.time() < end:
+            if self.proc.poll() is not None:
+                raise SystemExit(f"server exited early; see {self.data.parent / 'server.log'}")
+            try:
+                urllib.request.urlopen(self.base + "/", timeout=1).read()
+                return
+            except Exception:
+                time.sleep(0.2)
+        raise SystemExit("server did not start")
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            os.killpg(self.proc.pid, signal.SIGTERM)
+            try:
+                self.proc.wait(10)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+        self.proc = None
+
+    def bootstrap_instructor(self, name, pw):
+        r = subprocess.run([PYTHON, "-m", "flask", "--app", "server.app", "bootstrap-instructor", name],
+                           cwd=ROOT, env=dict(self.env(), ROBOTICS_INSTRUCTOR_PASSWORD=pw),
+                           capture_output=True, text=True, timeout=60)
+        return r.returncode == 0, r.stdout + r.stderr
+
+
+def stray_jvms(data):
+    out = subprocess.run(["pgrep", "-f", str(data)], capture_output=True, text=True).stdout.split()
+    me = str(os.getpid())
+    return [p for p in out if p != me]
+
+
+def sse_events(client, jid, timeout=30):
+    r = urllib.request.Request(client.base + f"/api/jobs/{jid}/events")
+    types = []
+    with client.op.open(r, timeout=timeout) as resp:
+        cur = None
+        for raw in resp:
+            line = raw.decode().rstrip("\n")
+            if line.startswith("event: "):
+                cur = line[7:]
+                types.append(cur)
+            if cur == "done" and line.startswith("data: "):
+                break
+    return types
+
+
+def main():
+    tmp = Path(tempfile.mkdtemp(prefix="robotics-accept-"))
+    data = tmp / "data"
+    srv = Server(data, "acceptance-secret-key")
+    starter = (LESSON / "starter" / "HelloWorld.java").read_text()
+    marker = '// TODO: log "Hello, world!"'
+    good = starter.replace(marker, 'robot.log("Hello, world!");')
+    syntax = good.replace('robot.log("Hello, world!");', 'robot.log("Hello, world!")')
+    infinite = starter.replace(marker, "while (true) { }")
+    flood = starter.replace(marker, 'while (true) { System.out.println("spam spam spam spam spam"); }')
+    P = "/api/me/projects/lesson0"
+    try:
+        step("1. Instructor bootstrap, lesson 0 and a student")
+        ok, msg = srv.bootstrap_instructor("teach", "teachpw1")
+        check("bootstrap-instructor creates the account", ok, msg)
+        srv.start()
+        t = Client(srv.base)
+        check("instructor logs in", t.login("teach", "teachpw1")[0] == 200)
+        code, ls = t.get("/api/instructor/lessons")
+        check("lesson0 is listed from the source tree, disabled",
+              code == 200 and [(l["id"], l["enabled"]) for l in ls] == [("lesson0", False)], ls)
+        check("instructor creates student ada", t.post("/api/instructor/students",
+              {"name": "Ada", "username": "ada", "password": "adapw123"})[0] == 201)
+        ada0 = Client(srv.base)
+        check("ada logs in", ada0.login("ada", "adapw123")[0] == 200)
+        check("ada sees no lessons while lesson0 is disabled", ada0.get("/api/lessons")[1] == [])
+        check("ada cannot open a disabled lesson", ada0.get(P)[0] == 404)
+        check("instructor enables lesson0", t.patch("/api/instructor/lessons/lesson0", {"enabled": True})[0] == 200)
+        check("ada now sees lesson0", [l["id"] for l in ada0.get("/api/lessons")[1]] == ["lesson0"])
+        code, page = Client(srv.base).get("/ide/")
+        check("IDE page is served", code == 200 and "<div id=\"root\">" in str(page))
+        code, page = Client(srv.base).get("/instructor/")
+        check("instructor page is served", code == 200 and "<div id=\"root\">" in str(page))
+
+        step("2. Student: starter builds, but the tests fail")
+        a = Client(srv.base)
+        check("ada logs in", a.login("ada", "adapw123")[0] == 200)
+        code, proj = a.get(P)
+        check("project opens with the starter", code == 200 and "TODO" in proj["source"])
+        b = a.run_job(P + "/build")
+        check("starter builds", b["status"] == "passed", b.get("message"))
+        tj = a.run_job(P + "/test")
+        check("starter fails the test with a readable message",
+              tj["status"] == "failed" and tj["reason"] == "test_failure"
+              and "Hello, world!" in tj["tests"][0]["message"], tj.get("message"))
+        check("submit refused", a.post(P + "/submit")[0] == 409)
+
+        step("3. Syntax error: friendly diagnostic, last good artifact kept")
+        a.put(P + "/source", {"source": syntax})
+        bad = a.run_job(P + "/build")
+        d = bad["diagnostics"][0] if bad["diagnostics"] else {}
+        check("compile error with a line number", bad["reason"] == "compile_error" and d.get("line") == 6, bad)
+        check("diagnostic message is friendly", bool(d.get("message")) and d.get("message") != d.get("javac"))
+        code, proj = a.get(P)
+        kept = proj["lastGoodBuild"]["jobId"]
+        check("last good artifact still on disk", (data / "builds" / kept / "artifact.jar").exists())
+
+        step("4. Fix it: build, test, submit")
+        a.put(P + "/source", {"source": good})
+        check("fixed code builds", a.run_job(P + "/build")["status"] == "passed")
+        check("canSubmit false before Test", a.get(P)[1]["canSubmit"] is False)
+        jid = a.post(P + "/test")[1]["jobId"]
+        types = sse_events(a, jid)
+        check("SSE stream delivers progress and a final done", "status" in types and types[-1] == "done", types)
+        tj = a.wait(jid)
+        check("fixed code passes the tests", tj["status"] == "passed" and tj["tests"][0]["status"] == "passed", tj.get("message"))
+        timing = tj["durations"]
+        check("canSubmit true after a passing Test", a.get(P)[1]["canSubmit"] is True)
+        code, entry = a.post(P + "/submit")
+        check("submit accepted", code == 200, entry)
+        rev = entry["revision"]
+
+        step("5. Editing after submit")
+        a.put(P + "/source", {"source": good + "\n// changed\n"})
+        check("canSubmit false after an edit", a.get(P)[1]["canSubmit"] is False)
+        check("submit refused after edit", a.post(P + "/submit")[0] == 409)
+
+        step("6. Instructor verifies the submitted revision")
+        code, q = t.get("/api/instructor/queue")
+        check("queue lists ada's submission", code == 200 and len(q) == 1 and q[0]["revision"] == rev, q)
+        key = q[0]["key"]
+        vb = t.run_job(f"/api/instructor/queue/{key}/build")
+        vt = t.run_job(f"/api/instructor/queue/{key}/test")
+        check("instructor build of submitted revision passes", vb["status"] == "passed" and vb["revision"] == rev)
+        check("instructor test of submitted revision passes (not the edited copy)", vt["status"] == "passed" and vt["revision"] == rev)
+        code, rv = t.get(f"/api/instructor/students/{q[0]['studentId']}/projects/lesson0")
+        check("instructor can read ada's source", code == 200 and "changed" in rv["source"])
+        check("verify did not touch ada's project record",
+              a.get(P)[1]["lastTest"]["jobId"] == tj["id"])
+
+        step("7. Restart: nothing is lost")
+        srv.stop()
+        srv.start()
+        t2, a2 = Client(srv.base), Client(srv.base)
+        check("logins work after restart", t2.login("teach", "teachpw1")[0] == 200 and a2.login("ada", "adapw123")[0] == 200)
+        check("queue survives", len(t2.get("/api/instructor/queue")[1]) == 1)
+        check("source survives", "changed" in a2.get(P)[1]["source"])
+        check("finished job record survives", a2.get(f"/api/jobs/{tj['id']}")[1]["status"] == "passed")
+        t, a = t2, a2
+
+        step("8. Negative checks")
+        anon = Client(srv.base)
+        check("anonymous API call gets 401", anon.get("/api/me")[0] == 401)
+        check("student cannot use instructor API", a.get("/api/instructor/students")[0] == 403)
+        check("student cannot read the queue", a.get("/api/instructor/queue")[0] == 403)
+        check("student cannot enable or disable lessons", a.patch("/api/instructor/lessons/lesson0", {"enabled": False})[0] == 403)
+        check("wrong password refused", Client(srv.base).login("ada", "nope")[0] == 401)
+        check("disabled student cannot log in", (t.patch(f"/api/instructor/students/{q[0]['studentId']}", {"enabled": False})[0] == 200
+                                                   and Client(srv.base).login("ada", "adapw123")[0] in (401, 403)))
+        t.patch(f"/api/instructor/students/{q[0]['studentId']}", {"enabled": True})
+        check("student can log in again once enabled", Client(srv.base).login("ada", "adapw123")[0] == 200)
+
+        step("9. Runaway programs are killed")
+        a = Client(srv.base)
+        a.login("ada", "adapw123")
+        a.put(P + "/source", {"source": infinite})
+        t0 = time.time()
+        j = a.run_job(P + "/test", 60)
+        check("infinite loop is stopped by the timeout", j["status"] == "failed" and j["reason"] == "timeout", j)
+        check("...within the limit (+ slack)", time.time() - t0 < TIMEOUT_SEC + 10, f"{time.time() - t0:.1f}s")
+        a.put(P + "/source", {"source": flood})
+        j = a.run_job(P + "/test", 60)
+        check("output flood is stopped", j["status"] == "failed" and j["reason"] in ("output_limit", "timeout"), j)
+        a.put(P + "/source", {"source": infinite})
+        jid = a.post(P + "/test")[1]["jobId"]
+        time.sleep(1.5)
+        check("Stop is accepted", a.post(f"/api/me/jobs/{jid}/stop")[0] in (200, 202))
+        j = a.wait(jid, 15)
+        check("stopped job reports cancelled", j["status"] == "cancelled" or j["reason"] == "cancelled", j)
+        time.sleep(1)
+        check("no orphan JVMs", not stray_jvms(data), str(stray_jvms(data)))
+
+        step("10. No outside requests from the pages")
+        import re
+        hits = set()
+        for sub in ("ide", "instructor"):
+            code, html = Client(srv.base).get(f"/{sub}/")
+            for m in re.findall(r'(?:src|href)="(https?://[^"]+)"', str(html)):
+                hits.add(m)
+        check("HTML references no external hosts", not hits, str(hits))
+
+        step("Summary")
+        print(f"  Lesson 0 timings (ms): {json.dumps(timing)}")
+        failed = [n for n, ok in results if not ok]
+        print(f"  {len(results) - len(failed)}/{len(results)} checks passed")
+        for n in failed:
+            print(f"  FAILED: {n}")
+        return 0 if not failed else 1
+    finally:
+        srv.stop()
+        if os.environ.get("KEEP_ACCEPTANCE_DATA"):
+            print(f"  data kept in {tmp}")
+        else:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Offline self-check (build_server.md section 5). `make check` runs this.
+# Run again with the uplink disconnected, ideally after a reboot.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+ETC=${ETC:-/etc/robotics}
+PREFIX=${PREFIX:-/opt/robotics}
+PORT=8080
+if [ -r "$ETC/server.env" ]; then PORT=$(. "$ETC/server.env"; echo "${PORT:-8080}"); fi
+
+fail=0
+ok()   { echo "PASS  $*"; }
+bad()  { echo "FAIL  $*"; fail=1; }
+warn() { echo "WARN  $*"; }
+run()  { # run <description> <cmd...>
+  local d=$1; shift
+  if out=$("$@" 2>&1); then ok "$d: $(echo "$out" | head -1)"; else bad "$d: $out"; fi
+}
+
+echo "== Toolchain"
+run "java -version"  java -version
+run "javac --release 8" javac --release 8 -version
+run "python3 --version" python3 --version
+
+echo "== Service"
+if [ ! -d "$PREFIX/app/server" ]; then
+  warn "$PREFIX/app/server not present (server not built on this branch yet); service checks skipped"
+else
+if systemctl is-active --quiet robotics; then ok "robotics.service active"; else bad "robotics.service not active"; fi
+if curl -s --max-time 5 -o /dev/null "http://127.0.0.1:$PORT/"; then ok "HTTP answers on :$PORT (--max-time 5)"
+else bad "no HTTP answer on :$PORT within 5s"; fi
+fi
+
+echo "== No external requests in built web apps"
+if [ -d "$PREFIX/app/web" ]; then
+  # Inert strings in bundled libraries: doc/licence links, and @monaco-editor/loader's default CDN path (never
+  # used: the IDE passes the bundled monaco via loader.config({monaco}); confirm in the browser network panel).
+  hits=$(grep -rEoh 'https?://[A-Za-z0-9.-]+' "$PREFIX/app/web" 2>/dev/null \
+    | grep -Ev '^https?://(localhost|127\.0\.0\.1|www\.w3\.org|reactjs\.org|react\.dev|github\.com|mantine\.dev|code\.visualstudio\.com|microsoft\.com|cdn\.jsdelivr\.net)$' | sort -u | head -20)
+  if [ -z "$hits" ]; then ok "no external URLs in $PREFIX/app/web"
+  else bad "external URLs in built web apps (review; some may be inert strings):"; echo "$hits" | sed 's/^/        /'; fi
+else
+  warn "$PREFIX/app/web not present (UI not built yet)"
+fi
+
+echo "== Orphan processes"
+orphans=$(pgrep -u robotics -x java 2>/dev/null | wc -l)
+if [ "$orphans" -eq 0 ]; then ok "no stray JVMs owned by robotics"; else bad "$orphans JVM(s) running as robotics while idle"; fi
+
+echo "== Data"
+if [ -d "${DATA:-/var/lib/robotics/data}" ]; then ok "data directory present"; else bad "data directory missing"; fi
+
+echo "== Resources"
+model=$(tr -d '\0' </proc/device-tree/model 2>/dev/null || echo "unknown")
+echo "INFO  $model; $(awk '/MemTotal/{printf "%.1f GB RAM", $2/1048576}' /proc/meminfo); $(awk '/SwapTotal/{printf "%.1f GB swap", $2/1048576}' /proc/meminfo)"
+
+echo "== Acceptance test (plan section 7)"
+if [ -x scripts/acceptance-test ]; then
+  if scripts/acceptance-test; then ok "acceptance test"; else bad "acceptance test"; fi
+else
+  warn "scripts/acceptance-test not present yet; skipped (covers API flow, infinite loop/flood kill, orphan JVMs, Lesson 0 timing, restart persistence)"
+fi
+
+cat <<'MSG'
+
+== Manual steps still needed (not automatable here)
+  - Unplug the uplink, reboot, and re-run `make check`.
+  - Load the IDE in a browser; the network panel must show only requests to the Pi.
+  - Power-cycle the Pi and confirm data/ and the queue survive.
+MSG
+
+[ "$fail" -eq 0 ] && echo "SELF-CHECK PASSED" || echo "SELF-CHECK FAILED"
+exit "$fail"

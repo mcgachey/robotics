@@ -1,0 +1,10 @@
+{
+  "name": "robotics-web",
+  "private": true,
+  "workspaces": ["common", "ide", "instructor"],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  }
+}
