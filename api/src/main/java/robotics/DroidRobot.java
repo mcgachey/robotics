@@ -15,9 +15,10 @@ import java.util.function.Consumer;
  *       as robot-forward on both sides, so this class models the right motor as wired reversed.
  *       The same student code then drives forward on both robots, and code that forgets the
  *       REVERSE call spins in circles on both.</li>
- *   <li><b>Non-blocking.</b> {@code setPower} returns immediately. A sender thread forwards changes
- *       to the {@link DroidLink} and skips writes that would not change anything, because FTC
- *       code sets power on every {@code loop()} pass and BLE writes are slow.</li>
+ *   <li><b>Synchronous.</b> Every command blocks until the droid controller has finished it:
+ *       {@code setPower} returns once the motor write is acknowledged, {@code rotateHead} once the head
+ *       has turned, and so on. Writes that would not change anything are skipped, because FTC code sets
+ *       power on every {@code loop()} pass and BLE writes are slow.</li>
  * </ul>
  *
  * Where the droid cannot match FTC:
@@ -28,8 +29,8 @@ import java.util.function.Consumer;
  *   <li><b>Zero-power behaviour.</b> The droid cannot truly brake or float. BRAKE stops with a
  *       0 ms ramp, anything else stops with the droid's default 300 ms ramp. Not tested on a droid.</li>
  *   <li><b>Failures.</b> Writes can fail (droid asleep, remote connected, link dropped). FTC has no
- *       equivalent, so failures are logged and retried, and {@link #flush} reports whether the
- *       droid caught up.</li>
+ *       equivalent, so a failed write is retried a few times and then logged and dropped. The next
+ *       command that needs the same state tries again.</li>
  *   <li><b>Safety.</b> Droid motors never stop on their own. Call {@link #close()} when the program
  *       ends; it sends stops. A JVM shutdown hook does the same on a normal or SIGTERM exit, but not
  *       on SIGKILL, so a killed program can leave a droid driving until the link or the droid's own
@@ -43,45 +44,38 @@ public class DroidRobot implements Robot, Closeable {
     /** Ramp the droid uses to stop when zero-power behaviour is not BRAKE (its stock default). */
     static final int DEFAULT_STOP_RAMP_MS = 300;
     static final int DEFAULT_RAMP_MS = 100;
-    static final long DEFAULT_MIN_INTERVAL_MS = 20;
     private static final long RETRY_DELAY_MS = 250;
-    private static final int CLOSE_ATTEMPTS = 3;
-    private static final long CLOSE_TIMEOUT_MS = 5000;
+    private static final int ATTEMPTS = 3;
 
     private final DroidLink link;
     private final Consumer<String> logger;
     private final int rampMs;
-    private final long minIntervalMs;
     private final Object lock = new Object();
     private final Motor left = new Motor(DroidLink.MOTOR_LEFT, false);
     private final Motor right = new Motor(DroidLink.MOTOR_RIGHT, true);
-    private final Thread sender;
     private final Thread shutdownHook;
-    private boolean closed;
+    /** One-shot droid actions (not motor state). */
+    private enum Action { BEEP, HEAD_LEFT, HEAD_RIGHT, HEAD_CENTER }
+    private static final int NO_SOUND = -1;
+    private boolean closed;   // guarded by lock
+    private boolean failing;  // guarded by lock; true while the link is rejecting writes
 
     public DroidRobot(DroidLink link) {
         this(link, new Consumer<String>() {
             @Override public void accept(String s) { System.out.println(s); }
-        }, DEFAULT_RAMP_MS, DEFAULT_MIN_INTERVAL_MS);
+        }, DEFAULT_RAMP_MS);
     }
 
     /**
      * @param logger        receives {@link #log} messages and link-failure notices
      * @param rampMs        ramp for speed changes (FTC changes power immediately; a small ramp is
      *                      kinder to a toy droid. Untested on hardware)
-     * @param minIntervalMs minimum gap between BLE writes
      */
-    public DroidRobot(DroidLink link, Consumer<String> logger, int rampMs, long minIntervalMs) {
+    public DroidRobot(DroidLink link, Consumer<String> logger, int rampMs) {
         if (link == null) throw new IllegalArgumentException("link");
         this.link = link;
         this.logger = logger;
         this.rampMs = rampMs;
-        this.minIntervalMs = minIntervalMs;
-        sender = new Thread(new Runnable() {
-            @Override public void run() { senderLoop(); }
-        }, "droid-sender");
-        sender.setDaemon(true);
-        sender.start();
         shutdownHook = new Thread(new Runnable() {
             @Override public void run() { closeQuietly(); }
         }, "droid-shutdown");
@@ -94,41 +88,43 @@ public class DroidRobot implements Robot, Closeable {
 
     @Override public DriveMotor rightDrive() { return right; }
 
-    /**
-     * Wait until every requested motor state has been sent to the droid.
-     *
-     * @return true if the droid is up to date, false on timeout (for example the link is down)
-     */
-    public boolean flush(long timeoutMs) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+    /** Blocks until the head has finished turning. 1 = right, -1 = left. */
+    @Override public void rotateHead(int direction) {
+        if (direction != 1 && direction != -1) throw new IllegalArgumentException("direction must be 1 or -1");
+        act(direction == 1 ? Action.HEAD_RIGHT : Action.HEAD_LEFT);
+    }
+
+    /** Blocks until the head is centered. */
+    @Override public void centerHead() { act(Action.HEAD_CENTER); }
+
+    /** Blocks until the droid has played the sound. {@code sound} indexes the droid's personality sounds. */
+    @Override public void beep(int sound) {
+        if (sound < 0) throw new IllegalArgumentException("sound must be 0 or more");
+        act(Action.BEEP, sound);
+    }
+
+    private void act(Action a) { act(a, NO_SOUND); }
+
+    private void act(Action a, int sound) {
         synchronized (lock) {
-            while (nextPending() != null) {
-                long remaining = deadline - System.currentTimeMillis();
-                if (remaining <= 0) return false;
-                lock.wait(remaining);
-            }
-            return true;
+            if (closed) return;
+            send(null, null, a, sound);
         }
     }
 
-    /** Stop both motors, send the stops, and shut the sender down. Safe to call more than once. */
+    /** Stop both motors and send the stops. Safe to call more than once. */
     @Override public void close() {
         synchronized (lock) {
             if (closed) return;
             left.power = 0;
             right.power = 0;
             closed = true;
-            lock.notifyAll();
+            if (!syncMotors()) log("could not stop the droid motors; power the droid off");
         }
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
         } catch (IllegalStateException e) {
             // already shutting down: we are the hook
-        }
-        try {
-            sender.join(CLOSE_TIMEOUT_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -191,7 +187,7 @@ public class DroidRobot implements Robot, Closeable {
             synchronized (lock) {
                 if (closed) return;  // close() has already stopped the motors; stay stopped
                 power = Math.max(-1.0, Math.min(1.0, p));
-                lock.notifyAll();
+                syncMotors();
             }
         }
 
@@ -201,7 +197,7 @@ public class DroidRobot implements Robot, Closeable {
             if (d == null) throw new IllegalArgumentException("direction");
             synchronized (lock) {
                 direction = d;
-                lock.notifyAll();
+                syncMotors();
             }
         }
 
@@ -211,72 +207,73 @@ public class DroidRobot implements Robot, Closeable {
             if (b == null) throw new IllegalArgumentException("behavior");
             synchronized (lock) {
                 zeroPower = b;
-                lock.notifyAll();
+                syncMotors();
             }
         }
 
         @Override public ZeroPowerBehavior getZeroPowerBehavior() { synchronized (lock) { return zeroPower; } }
     }
 
-    // ---- sender thread -----------------------------------------------------
+    // ---- link writes (all with lock held) -----------------------------------
 
-    /** The motor that needs a write, stops first. Call with lock held. */
+    /** The motor that needs a write, stops first. */
     private Motor nextPending() {
-        boolean lp = left.pending();
-        boolean rp = right.pending();
-        if (lp && left.desired().speed == 0) return left;
-        if (rp && right.desired().speed == 0) return right;
-        if (lp) return left;
-        if (rp) return right;
+        Motor[] all = {left, right};
+        for (Motor m : all) {
+            if (m.pending() && m.desired().speed == 0) return m;
+        }
+        for (Motor m : all) {
+            if (m.pending()) return m;
+        }
         return null;
     }
 
-    private void senderLoop() {
-        boolean failing = false;
-        int closeFailures = 0;
-        try {
-            while (true) {
-                Motor m;
-                Out out;
-                synchronized (lock) {
-                    m = nextPending();
-                    while (m == null) {
-                        if (closed) return;
-                        lock.wait();
-                        m = nextPending();
-                    }
-                    out = m.desired();
-                }
-                boolean ok = false;
-                try {
-                    ok = link.sendMotor(m.id, out.backward, out.speed, out.ramp);
-                } catch (RuntimeException e) {
-                    log("droid link error: " + e);
-                }
-                synchronized (lock) {
-                    if (ok) m.sent = out;
-                    lock.notifyAll();
-                    if (!ok && closed && ++closeFailures >= CLOSE_ATTEMPTS) {
-                        log("could not stop the droid motors; power the droid off");
-                        return;
-                    }
-                }
-                if (ok) {
-                    if (failing) log("droid link recovered");
-                    failing = false;
-                    sleep(minIntervalMs);
-                } else {
-                    if (!failing) log("droid did not accept a motor command; retrying");
-                    failing = true;
-                    sleep(RETRY_DELAY_MS);
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    /** Write every motor change the droid has not seen yet. @return false if the link gave up. */
+    private boolean syncMotors() {
+        Motor m;
+        while ((m = nextPending()) != null) {
+            Out out = m.desired();
+            if (!send(m, out, null, NO_SOUND)) return false;
+            m.sent = out;
         }
+        return true;
     }
 
-    private static void sleep(long ms) throws InterruptedException {
-        if (ms > 0) Thread.sleep(ms);
+    /** One link write (a motor change or an action), retried a few times. */
+    private boolean send(Motor m, Out out, Action act, int sound) {
+        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
+            boolean ok = false;
+            try {
+                ok = m != null ? link.sendMotor(m.id, out.backward, out.speed, out.ramp) : perform(act, sound);
+            } catch (RuntimeException e) {
+                log("droid link error: " + e);
+            }
+            if (ok) {
+                if (failing) log("droid link recovered");
+                failing = false;
+                return true;
+            }
+            if (!failing) log("droid did not accept a command; retrying");
+            failing = true;
+            if (attempt < ATTEMPTS) {
+                try {
+                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+        log("droid did not respond; giving up on this command");
+        return false;
+    }
+
+    private boolean perform(Action a, int sound) {
+        switch (a) {
+            case HEAD_LEFT: return link.rotateHead(false);
+            case HEAD_RIGHT: return link.rotateHead(true);
+            case HEAD_CENTER: return link.centerHead();
+            default: return link.sendBeep(sound);
+        }
     }
 }

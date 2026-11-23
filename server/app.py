@@ -12,6 +12,7 @@ from flask import Flask, Response, abort, g, jsonify, make_response, redirect, r
 from .accounts import AccountError, Accounts
 from .builder import BuildService
 from .config import load_config
+from .hardware import Hardware, HardwareError
 from .jobs import JobBusy, JobManager, ServerBusy, load_job_dict
 from .lessons import Lessons
 from .projects import ProjectError, Projects
@@ -40,8 +41,9 @@ def create_app(overrides: dict | None = None) -> Flask:
     projects = Projects(cfg.data_dir, lessons, cfg.max_source_kb)
     service = BuildService(cfg, lessons)
     jobs = JobManager(cfg, service)
+    hardware = Hardware(cfg, projects, lessons, accounts, jobs, service)
     app.robotics = SimpleNamespace(cfg=cfg, lessons=lessons, accounts=accounts, projects=projects,
-                                   service=service, jobs=jobs)
+                                   service=service, jobs=jobs, hardware=hardware)
 
     # --- helpers ---------------------------------------------------------
     def err(msg: str, status: int):
@@ -184,7 +186,7 @@ def create_app(overrides: dict | None = None) -> Flask:
         try:
             job = jobs.start(kind=kind, origin=origin, owner=owner, student_id=sid, lesson_id=lid, revision=rev,
                              class_name=meta["className"], api_version=meta.get("apiVersion", 0), run=run,
-                             on_finish=projects.record_job if origin == "student" else None)
+                             on_finish=projects.record_job if origin == "student" else projects.record_build)
         except JobBusy as e:
             return err(str(e), 409)
         except ServerBusy as e:
@@ -399,6 +401,40 @@ def create_app(overrides: dict | None = None) -> Flask:
         if not job or job.owner != "instructor":
             return err("No such job.", 404)
         job.cancel.set()
+        return jsonify({"ok": True})
+
+    # --- instructor: hardware (droids on the Pi) ---------------------------------
+    @app.get("/api/instructor/hardware")
+    @require("instructor")
+    def hardware_overview():
+        return jsonify(hardware.overview())
+
+    @app.post("/api/instructor/hardware/<board>/deploy")
+    @require("instructor")
+    def hardware_deploy(board):
+        d = body()
+        try:
+            job = hardware.deploy(board, str(d.get("studentId", "")), str(d.get("lessonId", "")), d.get("revision"))
+        except HardwareError as e:
+            return err(str(e), e.status)
+        return jsonify({"jobId": job.id, "revision": job.revision}), 202
+
+    @app.post("/api/instructor/hardware/<board>/stop")
+    @require("instructor")
+    def hardware_stop(board):
+        try:
+            hardware.stop(board)
+        except HardwareError as e:
+            return err(str(e), e.status)
+        return jsonify({"ok": True})
+
+    @app.delete("/api/instructor/hardware/<board>/assignment")
+    @require("instructor")
+    def hardware_unassign(board):
+        try:
+            hardware.unassign(board)
+        except HardwareError as e:
+            return err(str(e), e.status)
         return jsonify({"ok": True})
 
     # --- static React apps ------------------------------------------------

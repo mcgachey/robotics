@@ -13,6 +13,9 @@ public class MockRobot implements Robot {
     private final List<String> messages = new ArrayList<String>();
     private final MockDriveMotor leftDrive = new MockDriveMotor();
     private final MockDriveMotor rightDrive = new MockDriveMotor();
+    private final List<Integer> headMoves = new ArrayList<Integer>();
+    private int centers;
+    private final List<Integer> beepSounds = new ArrayList<Integer>();
 
     @Override
     public MockDriveMotor leftDrive() {
@@ -23,6 +26,30 @@ public class MockRobot implements Robot {
     public MockDriveMotor rightDrive() {
         return rightDrive;
     }
+
+    @Override public synchronized void rotateHead(int direction) {
+        if (direction != 1 && direction != -1) throw new IllegalArgumentException("direction must be 1 or -1");
+        headMoves.add(direction);
+    }
+
+    @Override public synchronized void centerHead() { centers++; }
+
+    @Override public synchronized void beep(int sound) {
+        if (sound < 0) throw new IllegalArgumentException("sound must be 0 or more");
+        beepSounds.add(sound);
+    }
+
+    /** The directions (1 or -1) passed to {@link #rotateHead}, in order. */
+    public synchronized List<Integer> headRotations() { return new ArrayList<Integer>(headMoves); }
+
+    /** How many times {@link #centerHead} was called. */
+    public synchronized int centerCount() { return centers; }
+
+    /** How many times {@link #beep} was called. */
+    public synchronized int beepCount() { return beepSounds.size(); }
+
+    /** The sound indexes passed to {@link #beep}, in order. */
+    public synchronized List<Integer> beepSounds() { return new ArrayList<Integer>(beepSounds); }
 
     /** A drive motor that just remembers its settings (power is clamped as on a real motor). */
     public static class MockDriveMotor implements DriveMotor {

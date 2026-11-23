@@ -35,6 +35,18 @@ public class StarterBotRobot implements Robot {
 
     @Override public DriveMotor rightDrive() { return rightDrive; }
 
+    @Override public void rotateHead(int direction) {
+        throw new UnsupportedOperationException("The StarterBot has no head");
+    }
+
+    @Override public void centerHead() {
+        throw new UnsupportedOperationException("The StarterBot has no head");
+    }
+
+    @Override public void beep(int sound) {
+        throw new UnsupportedOperationException("The StarterBot cannot beep");
+    }
+
     /** One-to-one adapter onto an SDK motor. */
     private static final class FtcDriveMotor implements DriveMotor {
         private final DcMotor motor;

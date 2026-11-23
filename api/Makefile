@@ -28,7 +28,7 @@ build/robotics-harness.jar: $(HARNESS_SRC) build/robotics-api.jar
 test: build
 	rm -rf build/test-classes && mkdir -p build/test-classes
 	$(JAVAC) $(JFLAGS) -cp "build/robotics-api.jar:$(JUNIT)" -d build/test-classes $(wildcard src/test/java/robotics/*.java)
-	$(JAVA) -cp "build/test-classes:build/robotics-api.jar:$(JUNIT)" org.junit.runner.JUnitCore robotics.MockRobotTest robotics.DroidRobotTest
+	$(JAVA) -cp "build/test-classes:build/robotics-api.jar:$(JUNIT)" org.junit.runner.JUnitCore robotics.MockRobotTest robotics.DroidRobotTest robotics.ControllerDroidLinkTest
 
 clean:
 	rm -rf build

@@ -28,9 +28,9 @@ class Job:
                  revision: int, directory: Path, class_name: str = "", api_version: int = 0,
                  output_cap: int = 262144):
         self.id = job_id
-        self.kind = kind            # "build" | "test"
-        self.origin = origin        # "student" | "instructor-verify"
-        self.owner = owner          # student id, or "instructor"
+        self.kind = kind            # "build" | "test" | "deploy"
+        self.origin = origin        # "student" | "instructor-verify" | "instructor-deploy"
+        self.owner = owner          # student id, "instructor", or "droid-<board>" for a deploy
         self.student_id = student_id
         self.lesson_id = lesson_id
         self.revision = revision
@@ -50,6 +50,7 @@ class Job:
         self.output = ""
         self.program_output = ""
         self.robot_log = ""         # what the program passed to robot.log(...), one message per line
+        self.board_id = ""          # deploy jobs: the droid board the program runs on
         self.cancel = threading.Event()
         self.events: list[dict] = []
         self.finished = False
@@ -98,6 +99,8 @@ class Job:
             "startedAt": self.started_at, "finishedAt": self.finished_at,
             "durations": self.durations, "diagnostics": self.diagnostics, "tests": self.tests,
         }
+        if self.board_id:
+            d["boardId"] = self.board_id
         if include_output:
             d["output"] = self.output
             d["programOutput"] = self.program_output
@@ -168,18 +171,23 @@ class JobManager:
             return self._jobs.get(job_id)
 
     def start(self, *, kind: str, origin: str, owner: str, student_id: str, lesson_id: str, revision: int,
-              class_name: str, api_version: int, run, on_finish=None) -> Job:
-        """run(job) does the work (it should call service.execute). Raises JobBusy/ServerBusy."""
+              class_name: str, api_version: int, run, on_finish=None, board_id: str = "") -> Job:
+        """run(job) does the work (it should call service.execute). Raises JobBusy/ServerBusy.
+
+        A deploy (board_id set) holds one droid for a long time, so it is limited per droid by its owner
+        and does not use up the global build slots."""
         with self._lock:
             if owner in self._active:
-                raise JobBusy("You already have a build or test running. Wait for it to finish, or press Stop.")
-            if len(self._active) >= self.cfg.max_concurrent_jobs:
+                raise JobBusy("This droid is already running a program. Stop it first." if board_id else
+                              "You already have a build or test running. Wait for it to finish, or press Stop.")
+            if not board_id and sum(1 for j in self._active.values() if not j.board_id) >= self.cfg.max_concurrent_jobs:
                 raise ServerBusy("The server is busy with other builds. Try again in a few seconds.")
             job_id = self.new_id()
             d = self.builds_dir / job_id
             d.mkdir(parents=True)
             job = Job(job_id, kind, origin, owner, student_id, lesson_id, revision, d,
                       class_name=class_name, api_version=api_version, output_cap=self.cfg.max_output_kb * 1024)
+            job.board_id = board_id
             self._active[owner] = job
             self._jobs[job_id] = job
             job.save()

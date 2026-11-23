@@ -1,0 +1,7 @@
+{
+  "id": "lesson1",
+  "title": "Lesson 1: Beep",
+  "className": "Beep",
+  "targetPhase": 1,
+  "apiVersion": 0
+}

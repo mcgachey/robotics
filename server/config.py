@@ -26,6 +26,8 @@ class Config:
     max_output_kb: int = 256
     max_concurrent_jobs: int = 2
     max_source_kb: int = 256
+    controller_url: str = "http://127.0.0.1:5050"  # the ESP32 board controller on this Pi
+    deploy_max_sec: int = 600  # a droid run is stopped after this long
     javac: str = "javac"
     java: str = "java"
     session_cookie_secure: bool = False
@@ -88,6 +90,8 @@ def load_config(overrides: dict | None = None) -> Config:
         max_heap_mb=num("BUILD_MAX_HEAP_MB", 256),
         max_output_kb=num("BUILD_MAX_OUTPUT_KB", 256),
         max_concurrent_jobs=num("MAX_CONCURRENT_JOBS", 2),
+        controller_url=env.get("CONTROLLER_URL", "http://127.0.0.1:5050").rstrip("/"),
+        deploy_max_sec=num("DEPLOY_MAX_SEC", 600),
         password_hash_method=env.get("PASSWORD_HASH_METHOD", "pbkdf2:sha256"),
         javac=env.get("JAVAC", "javac"), java=env.get("JAVA", "java"),
     )
