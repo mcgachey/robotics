@@ -133,9 +133,9 @@ class Server:
                 os.killpg(self.proc.pid, signal.SIGKILL)
         self.proc = None
 
-    def bootstrap_teacher(self, name, pw):
-        r = subprocess.run([PYTHON, "-m", "flask", "--app", "server.app", "bootstrap-teacher", name],
-                           cwd=ROOT, env=dict(self.env(), ROBOTICS_TEACHER_PASSWORD=pw),
+    def bootstrap_instructor(self, name, pw):
+        r = subprocess.run([PYTHON, "-m", "flask", "--app", "server.app", "bootstrap-instructor", name],
+                           cwd=ROOT, env=dict(self.env(), ROBOTICS_INSTRUCTOR_PASSWORD=pw),
                            capture_output=True, text=True, timeout=60)
         return r.returncode == 0, r.stdout + r.stderr
 
@@ -173,27 +173,27 @@ def main():
     flood = starter.replace(marker, 'while (true) { System.out.println("spam spam spam spam spam"); }')
     P = "/api/me/projects/lesson0"
     try:
-        step("1. Teacher bootstrap, lesson 0 and a student")
-        ok, msg = srv.bootstrap_teacher("teach", "teachpw1")
-        check("bootstrap-teacher creates the account", ok, msg)
+        step("1. Instructor bootstrap, lesson 0 and a student")
+        ok, msg = srv.bootstrap_instructor("teach", "teachpw1")
+        check("bootstrap-instructor creates the account", ok, msg)
         srv.start()
         t = Client(srv.base)
-        check("teacher logs in", t.login("teach", "teachpw1")[0] == 200)
-        code, ls = t.get("/api/teacher/lessons")
+        check("instructor logs in", t.login("teach", "teachpw1")[0] == 200)
+        code, ls = t.get("/api/instructor/lessons")
         check("lesson0 is listed from the source tree, disabled",
               code == 200 and [(l["id"], l["enabled"]) for l in ls] == [("lesson0", False)], ls)
-        check("teacher creates student ada", t.post("/api/teacher/students",
+        check("instructor creates student ada", t.post("/api/instructor/students",
               {"name": "Ada", "username": "ada", "password": "adapw123"})[0] == 201)
         ada0 = Client(srv.base)
         check("ada logs in", ada0.login("ada", "adapw123")[0] == 200)
         check("ada sees no lessons while lesson0 is disabled", ada0.get("/api/lessons")[1] == [])
         check("ada cannot open a disabled lesson", ada0.get(P)[0] == 404)
-        check("teacher enables lesson0", t.patch("/api/teacher/lessons/lesson0", {"enabled": True})[0] == 200)
+        check("instructor enables lesson0", t.patch("/api/instructor/lessons/lesson0", {"enabled": True})[0] == 200)
         check("ada now sees lesson0", [l["id"] for l in ada0.get("/api/lessons")[1]] == ["lesson0"])
         code, page = Client(srv.base).get("/ide/")
         check("IDE page is served", code == 200 and "<div id=\"root\">" in str(page))
-        code, page = Client(srv.base).get("/teacher/")
-        check("teacher page is served", code == 200 and "<div id=\"root\">" in str(page))
+        code, page = Client(srv.base).get("/instructor/")
+        check("instructor page is served", code == 200 and "<div id=\"root\">" in str(page))
 
         step("2. Student: starter builds, but the tests fail")
         a = Client(srv.base)
@@ -238,16 +238,16 @@ def main():
         check("canSubmit false after an edit", a.get(P)[1]["canSubmit"] is False)
         check("submit refused after edit", a.post(P + "/submit")[0] == 409)
 
-        step("6. Teacher verifies the submitted revision")
-        code, q = t.get("/api/teacher/queue")
+        step("6. Instructor verifies the submitted revision")
+        code, q = t.get("/api/instructor/queue")
         check("queue lists ada's submission", code == 200 and len(q) == 1 and q[0]["revision"] == rev, q)
         key = q[0]["key"]
-        vb = t.run_job(f"/api/teacher/queue/{key}/build")
-        vt = t.run_job(f"/api/teacher/queue/{key}/test")
-        check("teacher build of submitted revision passes", vb["status"] == "passed" and vb["revision"] == rev)
-        check("teacher test of submitted revision passes (not the edited copy)", vt["status"] == "passed" and vt["revision"] == rev)
-        code, rv = t.get(f"/api/teacher/students/{q[0]['studentId']}/projects/lesson0")
-        check("teacher can read ada's source", code == 200 and "changed" in rv["source"])
+        vb = t.run_job(f"/api/instructor/queue/{key}/build")
+        vt = t.run_job(f"/api/instructor/queue/{key}/test")
+        check("instructor build of submitted revision passes", vb["status"] == "passed" and vb["revision"] == rev)
+        check("instructor test of submitted revision passes (not the edited copy)", vt["status"] == "passed" and vt["revision"] == rev)
+        code, rv = t.get(f"/api/instructor/students/{q[0]['studentId']}/projects/lesson0")
+        check("instructor can read ada's source", code == 200 and "changed" in rv["source"])
         check("verify did not touch ada's project record",
               a.get(P)[1]["lastTest"]["jobId"] == tj["id"])
 
@@ -256,7 +256,7 @@ def main():
         srv.start()
         t2, a2 = Client(srv.base), Client(srv.base)
         check("logins work after restart", t2.login("teach", "teachpw1")[0] == 200 and a2.login("ada", "adapw123")[0] == 200)
-        check("queue survives", len(t2.get("/api/teacher/queue")[1]) == 1)
+        check("queue survives", len(t2.get("/api/instructor/queue")[1]) == 1)
         check("source survives", "changed" in a2.get(P)[1]["source"])
         check("finished job record survives", a2.get(f"/api/jobs/{tj['id']}")[1]["status"] == "passed")
         t, a = t2, a2
@@ -264,13 +264,13 @@ def main():
         step("8. Negative checks")
         anon = Client(srv.base)
         check("anonymous API call gets 401", anon.get("/api/me")[0] == 401)
-        check("student cannot use teacher API", a.get("/api/teacher/students")[0] == 403)
-        check("student cannot read the queue", a.get("/api/teacher/queue")[0] == 403)
-        check("student cannot enable or disable lessons", a.patch("/api/teacher/lessons/lesson0", {"enabled": False})[0] == 403)
+        check("student cannot use instructor API", a.get("/api/instructor/students")[0] == 403)
+        check("student cannot read the queue", a.get("/api/instructor/queue")[0] == 403)
+        check("student cannot enable or disable lessons", a.patch("/api/instructor/lessons/lesson0", {"enabled": False})[0] == 403)
         check("wrong password refused", Client(srv.base).login("ada", "nope")[0] == 401)
-        check("disabled student cannot log in", (t.patch(f"/api/teacher/students/{q[0]['studentId']}", {"enabled": False})[0] == 200
+        check("disabled student cannot log in", (t.patch(f"/api/instructor/students/{q[0]['studentId']}", {"enabled": False})[0] == 200
                                                    and Client(srv.base).login("ada", "adapw123")[0] in (401, 403)))
-        t.patch(f"/api/teacher/students/{q[0]['studentId']}", {"enabled": True})
+        t.patch(f"/api/instructor/students/{q[0]['studentId']}", {"enabled": True})
         check("student can log in again once enabled", Client(srv.base).login("ada", "adapw123")[0] == 200)
 
         step("9. Runaway programs are killed")
@@ -296,7 +296,7 @@ def main():
         step("10. No outside requests from the pages")
         import re
         hits = set()
-        for sub in ("ide", "teacher"):
+        for sub in ("ide", "instructor"):
             code, html = Client(srv.base).get(f"/{sub}/")
             for m in re.findall(r'(?:src|href)="(https?://[^"]+)"', str(html)):
                 hits.add(m)

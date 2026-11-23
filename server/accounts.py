@@ -1,4 +1,4 @@
-"""Teacher and student accounts: plain JSON files, hashed passwords (D4, D5)."""
+"""Instructor and student accounts: plain JSON files, hashed passwords (D4, D5)."""
 import re
 import secrets
 import shutil
@@ -29,26 +29,32 @@ class Accounts:
         self.data_dir = Path(data_dir)
         self.hash_method = hash_method
         self._dummy_hash = None
-        self.teacher_file = self.data_dir / "teacher.json"
+        self.instructor_file = self.data_dir / "instructor.json"
         self.students_dir = self.data_dir / "students"
+        legacy = self.data_dir / "teacher.json"  # accounts created before the teacher -> instructor rename
+        if legacy.exists() and not self.instructor_file.exists():
+            legacy.rename(self.instructor_file)
+            rec = read_json(self.instructor_file)
+            if rec and rec.get("id") == "teacher":
+                write_json(self.instructor_file, {**rec, "id": "instructor"})
 
-    # --- teacher ---------------------------------------------------------
-    def teacher(self) -> dict | None:
-        return read_json(self.teacher_file)
+    # --- instructor ---------------------------------------------------------
+    def instructor(self) -> dict | None:
+        return read_json(self.instructor_file)
 
-    def create_teacher(self, login: str, password: str, name: str = "Teacher", force: bool = False) -> dict:
+    def create_instructor(self, login: str, password: str, name: str = "Instructor", force: bool = False) -> dict:
         login = (login or "").strip().lower()
         if not LOGIN_RE.match(login):
             raise AccountError("The username may use lowercase letters, digits, '.', '-' and '_'.")
         _check_password(password)
         with lock_for("accounts"):
-            if self.teacher_file.exists() and not force:
-                raise AccountError("A teacher account already exists.")
+            if self.instructor_file.exists() and not force:
+                raise AccountError("An instructor account already exists.")
             if self.find_student_by_login(login):
                 raise AccountError("That username is used by a student.")
-            rec = {"id": "teacher", "login": login, "name": name,
+            rec = {"id": "instructor", "login": login, "name": name,
                    "passwordHash": generate_password_hash(password, method=self.hash_method)}
-            write_json(self.teacher_file, rec)
+            write_json(self.instructor_file, rec)
         return rec
 
     # --- students --------------------------------------------------------
@@ -87,7 +93,7 @@ class Accounts:
             raise AccountError("The username may use lowercase letters, digits, '.', '-' and '_' (up to 32).")
         _check_password(password)
         with lock_for("accounts"):
-            if self.find_student_by_login(login) or (self.teacher() or {}).get("login") == login:
+            if self.find_student_by_login(login) or (self.instructor() or {}).get("login") == login:
                 raise AccountError("That username is already taken.")
             sid = "s" + secrets.token_hex(4)
             rec = {"id": sid, "name": name, "login": login, "enabled": True,
@@ -121,13 +127,13 @@ class Accounts:
 
     # --- login -----------------------------------------------------------
     def authenticate(self, login: str, password: str) -> tuple[str, dict] | None:
-        """Return ("teacher"|"student", record) for valid credentials of an enabled account."""
+        """Return ("instructor"|"student", record) for valid credentials of an enabled account."""
         login = (login or "").strip().lower()
         if not isinstance(password, str):
             return None
-        teacher = self.teacher()
-        if teacher and teacher["login"] == login:
-            return ("teacher", teacher) if check_password_hash(teacher["passwordHash"], password) else None
+        instructor = self.instructor()
+        if instructor and instructor["login"] == login:
+            return ("instructor", instructor) if check_password_hash(instructor["passwordHash"], password) else None
         rec = self.find_student_by_login(login)
         if not rec:
             check_password_hash(self._dummy(), password)  # keep timing similar

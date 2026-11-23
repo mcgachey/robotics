@@ -26,7 +26,7 @@ copy() { # copy <src> <dest>; warn if the source is absent
 }
 copy server "$NEW/server"
 copy web/ide/dist "$NEW/web/ide"
-copy web/teacher/dist "$NEW/web/teacher"
+copy web/instructor/dist "$NEW/web/instructor"
 copy api/build/robotics-api.jar "$NEW/robotics-api.jar"
 copy api/build/robotics-harness.jar "$NEW/robotics-harness.jar"
 copy "$CACHE/junit-4.13.2.jar" "$NEW/junit-4.13.2.jar"

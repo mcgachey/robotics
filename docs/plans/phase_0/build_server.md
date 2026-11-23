@@ -87,7 +87,7 @@ Monaco is bundled from the `monaco-editor` package, and the editor wrapper is co
   venv/                          # the one Python environment
   app/                           # installed by make deploy (replaced each deploy)
     server/                      # Flask application
-    web/ide/  web/teacher/       # built React apps (dist)
+    web/ide/  web/instructor/       # built React apps (dist)
     lib/  robotics-api.jar  junit-4.13.2.jar  hamcrest-core-1.3.jar
     lessons/  scripts/
 /opt/node/                       # Node (build only)
@@ -119,7 +119,7 @@ The branch argument is optional and defaults to `main`. The scripts find the rep
 6. Install and enable the `systemd` unit. Disable `apt-daily` timers, `unattended-upgrades`, and boot waits for the network (section 6).
 7. Record the repo path and branch in `/etc/robotics/init.env`. This is how `update_rp.sh` knows init has run, and for which branch.
 8. Run `bin/update_rp.sh <branch>` for the first build and deploy.
-9. First install only (skipped if the teacher account already exists): `make bootstrap-teacher USER=...` (prompts for a password). Lessons come from the repo and deploy with the app. The teacher enables them in the teacher app.
+9. First install only (skipped if the instructor account already exists): `make bootstrap-instructor USER=...` (prompts for a password). Lessons come from the repo and deploy with the app. The instructor enables them in the instructor app.
 10. Print instructions for the offline check (section 5).
 
 ### 4.2 Update: `bin/update_rp.sh [branch]`
@@ -139,7 +139,7 @@ If it fails, fix the cause in the repo and run it again. If the Pi ends up in a 
 ### 4.3 Classroom time
 
 1. Connect the Pi to the classroom router only (no uplink).
-2. `systemd` starts the server at boot. Students and teacher use the web apps. Nothing is built or installed.
+2. `systemd` starts the server at boot. Students and instructor use the web apps. Nothing is built or installed.
 
 Anything that needs a download, a rebuild, or an update waits for config time.
 

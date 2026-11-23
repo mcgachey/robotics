@@ -69,21 +69,21 @@ class Api:
 
 
 @pytest.fixture
-def teacher(app):
-    app.robotics.accounts.create_teacher("teach", "secret1")
+def instructor(app):
+    app.robotics.accounts.create_instructor("teach", "secret1")
     a = Api(app)
     a.login("teach", "secret1")
     return a
 
 
 @pytest.fixture
-def lesson0(teacher):
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
+def lesson0(instructor):
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": True})
 
 
 @pytest.fixture
-def ada(app, teacher, lesson0):
-    teacher.post("/api/teacher/students", {"name": "Ada", "username": "ada", "password": "pw1234"}, 201)
+def ada(app, instructor, lesson0):
+    instructor.post("/api/instructor/students", {"name": "Ada", "username": "ada", "password": "pw1234"}, 201)
     a = Api(app)
     a.login("ada", "pw1234")
     return a

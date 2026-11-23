@@ -1,4 +1,4 @@
-export type Role = 'student' | 'teacher';
+export type Role = 'student' | 'instructor';
 
 export interface Me {
   role: Role;
@@ -27,7 +27,7 @@ export type JobStatus = 'running' | 'passed' | 'failed' | 'cancelled';
 export interface Job {
   id: string;
   kind: 'build' | 'test';
-  origin: 'student' | 'teacher-verify';
+  origin: 'student' | 'instructor-verify';
   studentId: string;
   lessonId: string;
   revision: number;
@@ -54,7 +54,7 @@ export interface Lesson {
   className: string;
   targetPhase: number;
   apiVersion: number;
-  enabled?: boolean; // teacher API only
+  enabled?: boolean; // instructor API only
 }
 
 export interface ProjectState {

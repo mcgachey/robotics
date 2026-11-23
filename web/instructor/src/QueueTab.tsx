@@ -10,7 +10,7 @@ export function QueueTab() {
 
   const load = useCallback(async () => {
     try {
-      setEntries(await get<QueueEntry[]>('/api/teacher/queue'));
+      setEntries(await get<QueueEntry[]>('/api/instructor/queue'));
     } catch (e) {
       notifications.show({ color: 'red', message: errorMessage(e) });
     }
@@ -24,7 +24,7 @@ export function QueueTab() {
   // Build / Test run the same service as the student's, on the pinned revision.
   const verify = async (e: QueueEntry, kind: 'build' | 'test') => {
     try {
-      const { jobId } = await post<{ jobId: string }>(`/api/teacher/queue/${e.key}/${kind}`);
+      const { jobId } = await post<{ jobId: string }>(`/api/instructor/queue/${e.key}/${kind}`);
       setChecking(e);
       stream.attach(jobId);
     } catch (err) {
@@ -33,7 +33,7 @@ export function QueueTab() {
   };
 
   const stop = async () => {
-    if (stream.jobId) await post(`/api/teacher/jobs/${stream.jobId}/stop`).catch(() => {});
+    if (stream.jobId) await post(`/api/instructor/jobs/${stream.jobId}/stop`).catch(() => {});
   };
 
   return (

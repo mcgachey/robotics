@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppShell, Button, Center, Container, Group, Loader, Tabs, Text, Title } from '@mantine/core';
-import { LoginForm, get, post, type Me } from '@robotics/common';
+import { ColorSchemeToggle, LoginForm, get, post, type Me } from '@robotics/common';
 import { LessonsTab } from './LessonsTab';
 import { QueueTab } from './QueueTab';
 import { StudentsTab } from './StudentsTab';
@@ -12,7 +12,7 @@ export function App() {
   }, []);
 
   if (me === undefined) return <Center mih="100vh"><Loader /></Center>;
-  if (me === null || me.role !== 'teacher') return <LoginForm title="Teacher login" role="teacher" onLogin={setMe} />;
+  if (me === null || me.role !== 'instructor') return <LoginForm title="Instructor login" role="instructor" onLogin={setMe} />;
 
   const logout = async () => {
     await post('/api/logout').catch(() => {});
@@ -22,10 +22,11 @@ export function App() {
     <AppShell header={{ height: 52 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Title order={4}>Robotics: Teacher</Title>
+          <Title order={4}>Robotics: Instructor</Title>
           <Group>
             <Text size="sm">{me.name}</Text>
             <Button variant="default" size="xs" onClick={logout}>Log out</Button>
+            <ColorSchemeToggle />
           </Group>
         </Group>
       </AppShell.Header>

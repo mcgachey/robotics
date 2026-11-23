@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Badge, Button, Group, Loader, Stack, Text } from '@mantine/core';
+import { Badge, Button, Group, Loader, Stack, Text, useComputedColorScheme } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Terminal, errorMessage, get, post, put, useJobStream, type Diagnostic, type Job, type Project, type ProjectState } from '@robotics/common';
 import { monaco } from './monacoSetup';
@@ -9,6 +9,7 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 const SAVE_DEBOUNCE_MS = 700;
 
 export function LessonView({ lessonId }: { lessonId: string }) {
+  const scheme = useComputedColorScheme('light');
   const base = `/api/me/projects/${lessonId}`;
   const [project, setProject] = useState<ProjectState | null>(null);
   const [title, setTitle] = useState('');
@@ -132,7 +133,7 @@ export function LessonView({ lessonId }: { lessonId: string }) {
   const submit = async () => {
     try {
       const entry = await post<{ revision: number }>(`${base}/submit`);
-      notifications.show({ color: 'green', title: 'Submitted', message: `Your teacher can now see revision ${entry.revision}.` });
+      notifications.show({ color: 'green', title: 'Submitted', message: `Your instructor can now see revision ${entry.revision}.` });
       await refreshState();
     } catch (e) {
       notifications.show({ color: 'red', title: 'Cannot submit', message: errorMessage(e) });
@@ -172,10 +173,11 @@ export function LessonView({ lessonId }: { lessonId: string }) {
           </Text>
         </Group>
       </Group>
-      <div style={{ flex: 1, minHeight: 0, borderTop: '1px solid var(--mantine-color-gray-3)' }}>
+      <div style={{ flex: 1, minHeight: 0, borderTop: '1px solid var(--mantine-color-default-border)' }}>
         <Editor
           height="100%"
           language="java"
+          theme={scheme === 'dark' ? 'vs-dark' : 'light'}
           defaultValue={initial}
           onChange={onChange}
           onMount={(ed) => {
@@ -185,7 +187,7 @@ export function LessonView({ lessonId }: { lessonId: string }) {
         />
       </div>
       <div style={{ padding: 8 }}>
-        <Terminal job={stream.job} running={running} live={stream.live} onGoto={goto} />
+        <Terminal split job={stream.job} running={running} live={stream.live} onGoto={goto} />
       </div>
     </Stack>
   );

@@ -21,7 +21,7 @@ describe('format', () => {
   it('colours and kinds', () => {
     expect(statusColor({ status: 'passed' }, false)).toBe('green');
     expect(statusColor({ status: 'passed' }, true)).toBe('blue');
-    expect(kindLabel({ kind: 'test', origin: 'teacher-verify' })).toBe('Test (teacher check)');
+    expect(kindLabel({ kind: 'test', origin: 'instructor-verify' })).toBe('Test (instructor check)');
   });
 });
 

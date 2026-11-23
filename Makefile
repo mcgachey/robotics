@@ -22,7 +22,7 @@ JARS  := $(CACHE)/junit-4.13.2.jar $(CACHE)/hamcrest-core-1.3.jar
 # Run a target in every component that has a Makefile.
 each = for c in $(COMPONENTS); do if [ -f $$c/Makefile ]; then $(MAKE) -C $$c $(1); else echo "WARNING: $$c/Makefile not present; skipping '$(1)' for $$c"; fi; done
 
-.PHONY: deps build test deploy check run clean bootstrap-teacher
+.PHONY: deps build test deploy check run clean bootstrap-instructor
 
 deps: $(JARS)
 	cd $(CACHE) && sha256sum -c ../deps/checksums.txt
@@ -55,8 +55,8 @@ check:
 run:
 	ROBOTICS_DATA_DIR=$(CURDIR)/data-dev $(VENV)/bin/flask --app server.app run
 
-# make bootstrap-teacher USER=<name>   (prompts for a password)
-bootstrap-teacher:
-	@[ "$(origin USER)" = "command line" ] || { echo "usage: make bootstrap-teacher USER=<name>"; exit 2; }
+# make bootstrap-instructor USER=<name>   (prompts for a password)
+bootstrap-instructor:
+	@[ "$(origin USER)" = "command line" ] || { echo "usage: make bootstrap-instructor USER=<name>"; exit 2; }
 	set -a; . $(ETC)/server.env; set +a; \
-	cd $(APP) && runuser -u robotics -- $(VENV)/bin/flask --app server.app bootstrap-teacher "$(USER)"
+	cd $(APP) && runuser -u robotics -- $(VENV)/bin/flask --app server.app bootstrap-instructor "$(USER)"

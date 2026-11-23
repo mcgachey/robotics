@@ -21,7 +21,7 @@ log = logging.getLogger("robotics")
 
 LANDING = """<!doctype html><meta charset="utf-8"><title>Robotics</title>
 <body style="font-family:sans-serif;max-width:30em;margin:3em auto">
-<h1>Robotics</h1><p><a href="/ide/">Student IDE</a></p><p><a href="/teacher/">Teacher</a></p></body>"""
+<h1>Robotics</h1><p><a href="/ide/">Student IDE</a></p><p><a href="/instructor/">Instructor</a></p></body>"""
 
 
 def create_app(overrides: dict | None = None) -> Flask:
@@ -75,10 +75,10 @@ def create_app(overrides: dict | None = None) -> Flask:
     def current_user():
         """The logged-in account, re-checked on every request (disabled students lose access at once)."""
         role, uid = session.get("role"), session.get("id")
-        if role == "teacher":
-            t = accounts.teacher()
+        if role == "instructor":
+            t = accounts.instructor()
             if t and t["id"] == uid:
-                return "teacher", t
+                return "instructor", t
         elif role == "student":
             s = accounts.student(uid)
             if s and s.get("enabled", True):
@@ -229,7 +229,7 @@ def create_app(overrides: dict | None = None) -> Flask:
         job.cancel.set()
         return jsonify({"ok": True})
 
-    # --- jobs (owner or teacher) -------------------------------------------
+    # --- jobs (owner or instructor) -------------------------------------------
     def job_for(jid: str):
         """(live Job or None, dict) for a job the caller may see; aborts with 404 otherwise."""
         if not valid_id(jid):
@@ -278,9 +278,9 @@ def create_app(overrides: dict | None = None) -> Flask:
         return Response(gen(), mimetype="text/event-stream",
                         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
-    # --- teacher: students -------------------------------------------------
-    @app.post("/api/teacher/students")
-    @require("teacher")
+    # --- instructor: students -------------------------------------------------
+    @app.post("/api/instructor/students")
+    @require("instructor")
     def create_student():
         d = body()
         try:
@@ -289,16 +289,16 @@ def create_app(overrides: dict | None = None) -> Flask:
             return err(str(e), 400)
         return jsonify(accounts.public(rec)), 201
 
-    @app.get("/api/teacher/students")
-    @require("teacher")
+    @app.get("/api/instructor/students")
+    @require("instructor")
     def list_students():
         out = []
         for s in accounts.students():
             out.append({**accounts.public(s), "projects": projects.student_summaries(s["id"])})
         return jsonify(out)
 
-    @app.patch("/api/teacher/students/<sid>")
-    @require("teacher")
+    @app.patch("/api/instructor/students/<sid>")
+    @require("instructor")
     def patch_student(sid):
         d = body()
         try:
@@ -310,14 +310,14 @@ def create_app(overrides: dict | None = None) -> Flask:
             return err(str(e), 400)
         return jsonify(accounts.public(rec))
 
-    # --- teacher: lessons (defined in the repo; the teacher only enables/disables) ---
-    @app.get("/api/teacher/lessons")
-    @require("teacher")
-    def teacher_lessons():
+    # --- instructor: lessons (defined in the repo; the instructor only enables/disables) ---
+    @app.get("/api/instructor/lessons")
+    @require("instructor")
+    def instructor_lessons():
         return jsonify(lessons.list_with_state())
 
-    @app.patch("/api/teacher/lessons/<lid>")
-    @require("teacher")
+    @app.patch("/api/instructor/lessons/<lid>")
+    @require("instructor")
     def patch_lesson(lid):
         enabled = body().get("enabled")
         if not isinstance(enabled, bool):
@@ -328,15 +328,15 @@ def create_app(overrides: dict | None = None) -> Flask:
             return err("No such lesson.", 404)
         return jsonify(next(m for m in lessons.list_with_state() if m["id"] == lid))
 
-    # --- teacher: review, queue, verify --------------------------------------
+    # --- instructor: review, queue, verify --------------------------------------
     def job_summary(ref):
         if not ref:
             return None
         rec = load_job_dict(jobs.builds_dir, ref["jobId"], include_output=False)
         return rec
 
-    @app.get("/api/teacher/students/<sid>/projects/<lid>")
-    @require("teacher")
+    @app.get("/api/instructor/students/<sid>/projects/<lid>")
+    @require("instructor")
     def review_project(sid, lid):
         student = accounts.student(sid)
         meta = lessons.meta(lid)
@@ -347,8 +347,8 @@ def create_app(overrides: dict | None = None) -> Flask:
                         "source": projects.read_source(sid, lid), "revisions": projects.revisions(sid, lid),
                         "lastBuildJob": job_summary(st["lastBuild"]), "lastTestJob": job_summary(st["lastTest"])})
 
-    @app.get("/api/teacher/students/<sid>/projects/<lid>/revisions/<int:rev>")
-    @require("teacher")
+    @app.get("/api/instructor/students/<sid>/projects/<lid>/revisions/<int:rev>")
+    @require("instructor")
     def review_revision(sid, lid, rev):
         meta = lessons.meta(lid)
         if not valid_id(sid) or not meta or rev not in projects.revisions(sid, lid):
@@ -356,9 +356,9 @@ def create_app(overrides: dict | None = None) -> Flask:
         p = projects.revision_path(sid, lid, meta["className"], rev)
         return jsonify({"revision": rev, "source": p.read_text("utf-8", "replace")})
 
-    @app.get("/api/teacher/queue")
-    @require("teacher")
-    def teacher_queue():
+    @app.get("/api/instructor/queue")
+    @require("instructor")
+    def instructor_queue():
         out = []
         for e in projects.queue():
             s = accounts.student(e["studentId"]) or {}
@@ -380,23 +380,23 @@ def create_app(overrides: dict | None = None) -> Flask:
         if not path.exists():
             return err("The submitted revision is missing.", 404)
         reuse = projects.good_build(sid, lid, rev) if kind == "test" else None
-        return start_job(kind, "teacher-verify", "teacher", sid, lid, rev, path, reuse)
+        return start_job(kind, "instructor-verify", "instructor", sid, lid, rev, path, reuse)
 
-    @app.post("/api/teacher/queue/<key>/build")
-    @require("teacher")
+    @app.post("/api/instructor/queue/<key>/build")
+    @require("instructor")
     def verify_build(key):
         return verify("build", key)
 
-    @app.post("/api/teacher/queue/<key>/test")
-    @require("teacher")
+    @app.post("/api/instructor/queue/<key>/test")
+    @require("instructor")
     def verify_test(key):
         return verify("test", key)
 
-    @app.post("/api/teacher/jobs/<jid>/stop")
-    @require("teacher")
-    def teacher_stop(jid):
+    @app.post("/api/instructor/jobs/<jid>/stop")
+    @require("instructor")
+    def instructor_stop(jid):
         job = jobs.get(jid) if valid_id(jid) else None
-        if not job or job.owner != "teacher":
+        if not job or job.owner != "instructor":
             return err("No such job.", 404)
         job.cancel.set()
         return jsonify({"ok": True})
@@ -424,21 +424,21 @@ def create_app(overrides: dict | None = None) -> Flask:
         app.add_url_rule(f"/{name}/<path:path>", f"{name}_asset", asset)
 
     static_app("ide", cfg.web_ide)
-    static_app("teacher", cfg.web_teacher)
+    static_app("instructor", cfg.web_instructor)
 
     # --- CLI -----------------------------------------------------------------
-    @app.cli.command("bootstrap-teacher")
+    @app.cli.command("bootstrap-instructor")
     @click.argument("username")
-    @click.option("--force", is_flag=True, help="Replace the existing teacher account.")
-    def bootstrap_teacher(username, force):
-        """Create the teacher account. Prompts for a password (or reads ROBOTICS_TEACHER_PASSWORD)."""
+    @click.option("--force", is_flag=True, help="Replace the existing instructor account.")
+    def bootstrap_instructor(username, force):
+        """Create the instructor account. Prompts for a password (or reads ROBOTICS_INSTRUCTOR_PASSWORD)."""
         import os
-        pw = os.environ.get("ROBOTICS_TEACHER_PASSWORD") or click.prompt(
-            "Teacher password", hide_input=True, confirmation_prompt=True)
+        pw = os.environ.get("ROBOTICS_INSTRUCTOR_PASSWORD") or click.prompt(
+            "Instructor password", hide_input=True, confirmation_prompt=True)
         try:
-            accounts.create_teacher(username, pw, force=force)
+            accounts.create_instructor(username, pw, force=force)
         except AccountError as e:
             raise click.ClickException(str(e))
-        click.echo(f"Teacher account '{username}' created.")
+        click.echo(f"Instructor account '{username}' created.")
 
     return app

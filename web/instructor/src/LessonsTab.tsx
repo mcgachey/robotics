@@ -3,13 +3,13 @@ import { Badge, Button, Table, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { errorMessage, get, patch, type Lesson } from '@robotics/common';
 
-// Lessons are defined in the repo (lessons/<id>/). The teacher only decides which ones students can see.
+// Lessons are defined in the repo (lessons/<id>/). The instructor only decides which ones students can see.
 export function LessonsTab() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const load = useCallback(async () => {
     try {
-      setLessons(await get<Lesson[]>('/api/teacher/lessons'));
+      setLessons(await get<Lesson[]>('/api/instructor/lessons'));
     } catch (e) {
       notifications.show({ color: 'red', message: errorMessage(e) });
     }
@@ -18,7 +18,7 @@ export function LessonsTab() {
 
   const toggle = async (l: Lesson) => {
     try {
-      await patch(`/api/teacher/lessons/${l.id}`, { enabled: !l.enabled });
+      await patch(`/api/instructor/lessons/${l.id}`, { enabled: !l.enabled });
       notifications.show({ color: 'green', message: `${l.title} is now ${l.enabled ? 'hidden from' : 'available to'} students.` });
       await load();
     } catch (e) {

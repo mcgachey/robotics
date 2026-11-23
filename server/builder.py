@@ -149,7 +149,7 @@ class BuildService:
         shutil.rmtree(tests_src, ignore_errors=True)
         files = sorted(self.lessons.tests_dir(lesson).glob("*.java"))
         if not files:
-            job.set_result("failed", "lesson_error", "This lesson has no tests yet. Tell your teacher.")
+            job.set_result("failed", "lesson_error", "This lesson has no tests yet. Tell your instructor.")
             job.emit("status", job.message)
             return
         libs = os.pathsep.join([str(jar), self.cfg.classpath_libs])
@@ -176,7 +176,7 @@ class BuildService:
                 return
             if r.returncode != 0:
                 job.set_result("failed", "lesson_error",
-                               "The lesson's tests did not compile, so this is not your mistake. Tell your teacher.")
+                               "The lesson's tests did not compile, so this is not your mistake. Tell your instructor.")
                 job.emit("status", job.message)
                 return
             self._publish_tests(tests_out, cached)
@@ -206,7 +206,7 @@ class BuildService:
         total = len(job.tests)
         bad = [t for t in job.tests if t["status"] in ("failed", "error")]
         if total == 0:
-            job.set_result("failed", "lesson_error", "The lesson's tests did not run any checks. Tell your teacher.")
+            job.set_result("failed", "lesson_error", "The lesson's tests did not run any checks. Tell your instructor.")
         elif bad:
             job.set_result("failed", "test_failure", f"{len(bad)} of {total} test(s) failed.")
         else:

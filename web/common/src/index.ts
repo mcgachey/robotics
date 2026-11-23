@@ -4,3 +4,4 @@ export * from './format';
 export { useJobStream } from './useJobStream';
 export { Terminal } from './Terminal';
 export { LoginForm } from './LoginForm';
+export { ColorSchemeToggle } from './ColorSchemeToggle';

@@ -123,16 +123,16 @@ printf 'REPO=%s\nBRANCH=%s\nINITIALIZED=%s\n' "$REPO" "$BRANCH" "$(date -Is)" > 
 step "First build and deploy (update_rp.sh $BRANCH)"
 "$REPO/bin/update_rp.sh" "$BRANCH"
 
-# 9. First-install teacher account (lessons ship with the app; the teacher enables them)
-step "Teacher account"
+# 9. First-install instructor account (lessons ship with the app; the instructor enables them)
+step "Instructor account"
 cd "$REPO"
-if [ -e "$DATA/teacher.json" ]; then
-  echo "teacher account already exists"
+if [ -e "$DATA/instructor.json" ]; then
+  echo "instructor account already exists"
 elif [ -t 0 ]; then
-  read -r -p "Teacher username: " teacher
-  make bootstrap-teacher USER="$teacher"
+  read -r -p "Instructor username: " instructor
+  make bootstrap-instructor USER="$instructor"
 else
-  echo "no terminal: later run  make bootstrap-teacher USER=<name>"
+  echo "no terminal: later run  make bootstrap-instructor USER=<name>"
 fi
 
 # 10. Next steps

@@ -9,7 +9,7 @@ Plans: `docs/plans/phase_0/` (`plan.md`, `build_server.md`).
 |------|------|
 | `api/` | `robotics-api.jar` (Program, Robot, MockRobot, ProgramRunner) and the JUnit harness (Java 8 target) |
 | `server/` | Flask app: accounts, lessons, projects, build/test jobs, submit queue |
-| `web/` | npm workspaces: `common`, `ide` (student, Monaco), `teacher` |
+| `web/` | npm workspaces: `common`, `ide` (student, Monaco), `instructor` |
 | `lessons/lesson0/` | Hello World lesson: `lesson.json`, `starter/`, `tests/` |
 | `scripts/` | `deploy`, `self-check`, `acceptance-test` |
 | `bin/` | `init_rp.sh`, `update_rp.sh` (Pi provisioning) |
@@ -23,14 +23,14 @@ make deps build test PREFIX=$PWD/.local     # downloads JUnit, builds jars, venv
 scripts/acceptance-test                     # end-to-end check against a throw-away server
 ```
 
-Run the server by hand (data in `data-dev/`), then open <http://127.0.0.1:5000/ide/> or `/teacher/`:
+Run the server by hand (data in `data-dev/`), then open <http://127.0.0.1:5000/ide/> or `/instructor/`:
 
 ```bash
-ROBOTICS_TEACHER_PASSWORD=pw .local/venv/bin/flask --app server.app bootstrap-teacher teacher   # once
+ROBOTICS_INSTRUCTOR_PASSWORD=pw .local/venv/bin/flask --app server.app bootstrap-instructor instructor   # once
 make run PREFIX=$PWD/.local
 ```
 
-Create students and lessons in the teacher page (Lesson 0 can be pasted from `lessons/lesson0`).
+Create students and lessons in the instructor page (Lesson 0 can be pasted from `lessons/lesson0`).
 Web dev server with hot reload: `cd web/ide && npx vite` (proxies `/api` to port 5000).
 
 ## On the Pi

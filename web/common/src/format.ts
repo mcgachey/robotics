@@ -37,5 +37,5 @@ export function durationLabel(job: Pick<Job, 'durations'>): string {
 
 export function kindLabel(job: Pick<Job, 'kind' | 'origin'>): string {
   const k = job.kind === 'build' ? 'Build' : 'Test';
-  return job.origin === 'teacher-verify' ? `${k} (teacher check)` : k;
+  return job.origin === 'instructor-verify' ? `${k} (instructor check)` : k;
 }

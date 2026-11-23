@@ -28,7 +28,7 @@ def run(app, tmp_path):
 
 
 @pytest.fixture
-def lesson(app, teacher, lesson0):
+def lesson(app, instructor, lesson0):
     return app.robotics.lessons.meta("lesson0")
 
 

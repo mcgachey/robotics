@@ -1,4 +1,4 @@
-# Web: npm workspaces (common, ide, teacher). Node comes from $(NODE_HOME) via the root Makefile's PATH.
+# Web: npm workspaces (common, ide, instructor). Node comes from $(NODE_HOME) via the root Makefile's PATH.
 SHELL := /bin/bash
 .SHELLFLAGS := -euo pipefail -c
 
@@ -14,4 +14,4 @@ test: node_modules/.stamp
 	npm test
 
 clean:
-	rm -rf ide/dist teacher/dist node_modules
+	rm -rf ide/dist instructor/dist node_modules

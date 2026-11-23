@@ -17,7 +17,7 @@ export function LoginForm({ title, role, onLogin }: { title: string; role: Role;
       const me = await post<Me>('/api/login', { username, password });
       if (me.role !== role) {
         await post('/api/logout');
-        setError(role === 'teacher' ? 'That is not a teacher account.' : 'Teachers: use the teacher page.');
+        setError(role === 'instructor' ? 'That is not an instructor account.' : 'Instructors: use the instructor page.');
       } else {
         onLogin(me);
       }

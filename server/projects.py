@@ -102,7 +102,7 @@ class Projects:
 
     # --- results ---------------------------------------------------------
     def record_job(self, job) -> None:
-        """Called when a student's own job finishes. Never touched by teacher-verify jobs."""
+        """Called when a student's own job finishes. Never touched by instructor-verify jobs."""
         sid, lid = job.student_id, job.lesson_id
         with self._lock(sid, lid):
             pj = self.open(sid, lid)
@@ -172,7 +172,7 @@ class Projects:
         return e
 
     def student_summaries(self, sid: str) -> dict:
-        """lessonId -> short status of each of the student's projects (for the teacher's list)."""
+        """lessonId -> short status of each of the student's projects (for the instructor's list)."""
         out = {}
         d = self.workspaces / sid
         if d.is_dir():

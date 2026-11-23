@@ -16,7 +16,7 @@ def job(a, kind, lid="lesson0"):
 
 
 # --- auth and roles ------------------------------------------------------------
-def test_login_logout_and_me(app, teacher, ada):
+def test_login_logout_and_me(app, instructor, ada):
     assert ada.get("/api/me")["role"] == "student"
     ada.post("/api/logout")
     ada.get("/api/me", 401)
@@ -26,50 +26,50 @@ def test_login_logout_and_me(app, teacher, ada):
 
 def test_anonymous_gets_401_everywhere(app, ada):
     anon = Api(app)
-    for m, p in [("GET", "/api/lessons"), ("GET", "/api/me/projects/lesson0"), ("GET", "/api/teacher/queue"),
+    for m, p in [("GET", "/api/lessons"), ("GET", "/api/me/projects/lesson0"), ("GET", "/api/instructor/queue"),
                  ("GET", "/api/jobs/x"), ("POST", "/api/me/projects/lesson0/build")]:
         assert anon.call(m, p).status_code == 401, p
 
 
-def test_student_cannot_use_teacher_routes(ada):
-    for m, p in [("GET", "/api/teacher/students"), ("POST", "/api/teacher/students"), ("GET", "/api/teacher/lessons"),
-                 ("PATCH", "/api/teacher/lessons/lesson0"), ("GET", "/api/teacher/queue"),
-                 ("PATCH", "/api/teacher/students/sabcdef01"),
-                 ("GET", "/api/teacher/students/sabcdef01/projects/lesson0"),
-                 ("POST", "/api/teacher/queue/x_y/build"), ("POST", "/api/teacher/queue/x_y/test")]:
+def test_student_cannot_use_instructor_routes(ada):
+    for m, p in [("GET", "/api/instructor/students"), ("POST", "/api/instructor/students"), ("GET", "/api/instructor/lessons"),
+                 ("PATCH", "/api/instructor/lessons/lesson0"), ("GET", "/api/instructor/queue"),
+                 ("PATCH", "/api/instructor/students/sabcdef01"),
+                 ("GET", "/api/instructor/students/sabcdef01/projects/lesson0"),
+                 ("POST", "/api/instructor/queue/x_y/build"), ("POST", "/api/instructor/queue/x_y/test")]:
         assert ada.call(m, p, {}).status_code == 403, (m, p)
 
 
-def test_teacher_cannot_use_student_routes(teacher, lesson0):
-    assert teacher.call("GET", "/api/me/projects/lesson0").status_code == 403
+def test_instructor_cannot_use_student_routes(instructor, lesson0):
+    assert instructor.call("GET", "/api/me/projects/lesson0").status_code == 403
 
 
-def test_disabled_student_loses_access_immediately(app, teacher, ada):
+def test_disabled_student_loses_access_immediately(app, instructor, ada):
     sid = ada.get("/api/me")["id"]
-    teacher.patch(f"/api/teacher/students/{sid}", {"enabled": False})
+    instructor.patch(f"/api/instructor/students/{sid}", {"enabled": False})
     ada.get("/api/me", 401)
     Api(app).login("ada", "pw1234", 401)
-    teacher.patch(f"/api/teacher/students/{sid}", {"enabled": True})
+    instructor.patch(f"/api/instructor/students/{sid}", {"enabled": True})
     Api(app).login("ada", "pw1234")
 
 
-def test_password_reset_and_validation(app, teacher, ada):
+def test_password_reset_and_validation(app, instructor, ada):
     sid = ada.get("/api/me")["id"]
-    teacher.patch(f"/api/teacher/students/{sid}", {"password": "newpass"})
+    instructor.patch(f"/api/instructor/students/{sid}", {"password": "newpass"})
     Api(app).login("ada", "pw1234", 401)
     Api(app).login("ada", "newpass")
-    teacher.post("/api/teacher/students", {"name": "Dup", "username": "ada", "password": "xxxxxx"}, 400)
-    teacher.post("/api/teacher/students", {"name": "X", "username": "bad name", "password": "xxxxxx"}, 400)
-    teacher.post("/api/teacher/students", {"name": "X", "username": "xx", "password": "1"}, 400)
+    instructor.post("/api/instructor/students", {"name": "Dup", "username": "ada", "password": "xxxxxx"}, 400)
+    instructor.post("/api/instructor/students", {"name": "X", "username": "bad name", "password": "xxxxxx"}, 400)
+    instructor.post("/api/instructor/students", {"name": "X", "username": "xx", "password": "1"}, 400)
 
 
 def test_passwords_are_hashed_on_disk(app, ada):
-    raw = (app.robotics.cfg.data_dir / "teacher.json").read_text()
+    raw = (app.robotics.cfg.data_dir / "instructor.json").read_text()
     assert "secret1" not in raw and "pbkdf2" in raw
 
 
 # --- lessons and projects -------------------------------------------------------------
-def test_project_created_from_starter_and_starter_edits_do_not_touch_it(app, teacher, ada):
+def test_project_created_from_starter_and_starter_edits_do_not_touch_it(app, instructor, ada):
     assert ada.get("/api/me/projects/lesson0")["source"] == STARTER
     # Simulate a redeploy with a changed starter (the lesson files are source, never edited at runtime).
     app.robotics.lessons.dir = Path(shutil.copytree(app.robotics.lessons.dir, app.robotics.cfg.data_dir / "l2"))
@@ -78,10 +78,10 @@ def test_project_created_from_starter_and_starter_edits_do_not_touch_it(app, tea
     ada.get("/api/me/projects/nope", 404)
 
 
-def test_lessons_start_disabled_and_teacher_toggles_them(app, teacher):
-    t = teacher.get("/api/teacher/lessons")
+def test_lessons_start_disabled_and_instructor_toggles_them(app, instructor):
+    t = instructor.get("/api/instructor/lessons")
     assert [(l["id"], l["enabled"]) for l in t] == [("lesson0", False)]
-    teacher.post("/api/teacher/students", {"name": "Ada", "username": "ada", "password": "pw1234"}, 201)
+    instructor.post("/api/instructor/students", {"name": "Ada", "username": "ada", "password": "pw1234"}, 201)
     ada = Api(app)
     ada.login("ada", "pw1234")
     assert ada.get("/api/lessons") == []
@@ -89,26 +89,26 @@ def test_lessons_start_disabled_and_teacher_toggles_them(app, teacher):
                  ("POST", "/api/me/projects/lesson0/build"), ("POST", "/api/me/projects/lesson0/test"),
                  ("POST", "/api/me/projects/lesson0/submit")]:
         assert ada.call(m, p, {"source": "x"}).status_code == 404, (m, p)
-    assert teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})["enabled"] is True
+    assert instructor.patch("/api/instructor/lessons/lesson0", {"enabled": True})["enabled"] is True
     assert [l["id"] for l in ada.get("/api/lessons")] == ["lesson0"]
     ada.get("/api/me/projects/lesson0")
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": False})
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": False})
     assert ada.get("/api/lessons") == []
     ada.get("/api/me/projects/lesson0", 404)
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": "yes"}, 400)
-    teacher.patch("/api/teacher/lessons/nope", {"enabled": True}, 404)
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": "yes"}, 400)
+    instructor.patch("/api/instructor/lessons/nope", {"enabled": True}, 404)
     # the choice is stored in the data directory and survives a restart
     app2 = create_app({"ROBOTICS_DATA_DIR": str(app.robotics.cfg.data_dir)})
     assert app2.robotics.lessons.enabled_ids() == set()
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": True})
     assert create_app({"ROBOTICS_DATA_DIR": str(app.robotics.cfg.data_dir)}).robotics.lessons.enabled_ids() == {"lesson0"}
 
 
-def test_disabling_keeps_student_work(app, teacher, ada):
+def test_disabling_keeps_student_work(app, instructor, ada):
     save(ada, GOOD)
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": False})
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": False})
     ada.get("/api/me/projects/lesson0", 404)
-    teacher.patch("/api/teacher/lessons/lesson0", {"enabled": True})
+    instructor.patch("/api/instructor/lessons/lesson0", {"enabled": True})
     assert ada.get("/api/me/projects/lesson0")["source"] == GOOD
 
 
@@ -125,9 +125,9 @@ def test_invalid_lesson_directories_are_skipped(tmp_path):
     assert ls.meta("broken") is None and ls.meta("../lesson0") is None
 
 
-def test_other_students_cannot_see_my_work(app, teacher, ada):
+def test_other_students_cannot_see_my_work(app, instructor, ada):
     save(ada, GOOD)
-    teacher.post("/api/teacher/students", {"name": "Bob", "username": "bob", "password": "pw1234"}, 201)
+    instructor.post("/api/instructor/students", {"name": "Bob", "username": "bob", "password": "pw1234"}, 201)
     bob = Api(app)
     bob.login("bob", "pw1234")
     assert bob.get("/api/me/projects/lesson0")["source"] == STARTER  # his own, not Ada's
@@ -137,7 +137,7 @@ def test_other_students_cannot_see_my_work(app, teacher, ada):
     bob.post(f"/api/me/jobs/{jid}/stop", status=404)
     ada.wait_job(jid)
     bob.get(f"/api/jobs/{jid}", 404)
-    teacher.get(f"/api/jobs/{jid}")  # teacher may
+    instructor.get(f"/api/jobs/{jid}")  # instructor may
 
 
 def test_path_tricks_rejected(ada):
@@ -216,9 +216,9 @@ def test_infinite_loop_killed_and_server_stays_responsive(ada):
     assert j["reason"] == "timeout" and "ran too long" in j["message"]
 
 
-def test_global_concurrency_limit(app, teacher, ada):
-    teacher.post("/api/teacher/students", {"name": "B", "username": "b1", "password": "pw1234"}, 201)
-    teacher.post("/api/teacher/students", {"name": "C", "username": "c1", "password": "pw1234"}, 201)
+def test_global_concurrency_limit(app, instructor, ada):
+    instructor.post("/api/instructor/students", {"name": "B", "username": "b1", "password": "pw1234"}, 201)
+    instructor.post("/api/instructor/students", {"name": "C", "username": "c1", "password": "pw1234"}, 201)
     clients = [ada]
     for u in ("b1", "c1"):
         a = Api(app)
@@ -251,38 +251,38 @@ def test_finished_job_events_replay_from_disk_after_restart(env, app, ada):
     assert "event: done" in body
 
 
-# --- submit, queue, teacher verify (acceptance steps 7-10) -----------------------------------------
-def test_submit_queue_and_teacher_verify_pinned_to_revision(env, app, teacher, ada):
+# --- submit, queue, instructor verify (acceptance steps 7-10) -----------------------------------------
+def test_submit_queue_and_instructor_verify_pinned_to_revision(env, app, instructor, ada):
     sid = ada.get("/api/me")["id"]
     save(ada, GOOD)
     assert job(ada, "test")["status"] == "passed"
     entry = ada.post("/api/me/projects/lesson0/submit")
     assert entry["revision"] == 1
 
-    (q,) = teacher.get("/api/teacher/queue")
+    (q,) = instructor.get("/api/instructor/queue")
     assert q["studentName"] == "Ada" and q["revision"] == 1 and q["key"] == f"{sid}_lesson0"
 
     # Ada breaks her code after submitting: the submission must not change.
     save(ada, STARTER)
     assert job(ada, "build")["revision"] == 2
-    assert teacher.get("/api/teacher/queue")[0]["revision"] == 1
+    assert instructor.get("/api/instructor/queue")[0]["revision"] == 1
 
     key = q["key"]
-    b = teacher.post(f"/api/teacher/queue/{key}/build", status=202)
-    bj = teacher.wait_job(b["jobId"])
-    assert bj["status"] == "passed" and bj["origin"] == "teacher-verify" and bj["revision"] == 1
-    t = teacher.wait_job(teacher.post(f"/api/teacher/queue/{key}/test", status=202)["jobId"])
+    b = instructor.post(f"/api/instructor/queue/{key}/build", status=202)
+    bj = instructor.wait_job(b["jobId"])
+    assert bj["status"] == "passed" and bj["origin"] == "instructor-verify" and bj["revision"] == 1
+    t = instructor.wait_job(instructor.post(f"/api/instructor/queue/{key}/test", status=202)["jobId"])
     assert t["status"] == "passed" and t["revision"] == 1, "tests the pinned revision, not Ada's later edit"
     assert t["tests"][0]["status"] == "passed"
-    # teacher jobs never alter Ada's project record
+    # instructor jobs never alter Ada's project record
     assert ada.get("/api/me/projects/lesson0")["lastTest"]["revision"] == 1
-    teacher.post("/api/teacher/queue/nope_x/build", status=404)
+    instructor.post("/api/instructor/queue/nope_x/build", status=404)
 
     # Restart: everything is still there.
     app2 = create_app(env)
     t2 = Api(app2)
     t2.login("teach", "secret1")
-    assert t2.get("/api/teacher/queue")[0]["revision"] == 1
+    assert t2.get("/api/instructor/queue")[0]["revision"] == 1
     a2 = Api(app2)
     a2.login("ada", "pw1234")
     assert a2.get("/api/me/projects/lesson0")["source"] == STARTER
@@ -291,20 +291,20 @@ def test_submit_queue_and_teacher_verify_pinned_to_revision(env, app, teacher, a
     save(a2, GOOD)
     assert job(a2, "test")["status"] == "passed"
     a2.post("/api/me/projects/lesson0/submit")
-    q = t2.get("/api/teacher/queue")
+    q = t2.get("/api/instructor/queue")
     assert len(q) == 1 and q[0]["revision"] == 3
 
 
-def test_teacher_review(teacher, ada):
+def test_instructor_review(instructor, ada):
     sid = ada.get("/api/me")["id"]
     save(ada, GOOD)
     job(ada, "test")
-    (s,) = teacher.get("/api/teacher/students")
+    (s,) = instructor.get("/api/instructor/students")
     assert s["projects"]["lesson0"]["lastTest"]["status"] == "passed" and "passwordHash" not in s
-    r = teacher.get(f"/api/teacher/students/{sid}/projects/lesson0")
+    r = instructor.get(f"/api/instructor/students/{sid}/projects/lesson0")
     assert r["source"] == GOOD and r["lastTestJob"]["status"] == "passed" and r["revisions"] == [1]
-    assert teacher.get(f"/api/teacher/students/{sid}/projects/lesson0/revisions/1")["source"] == GOOD
-    teacher.get(f"/api/teacher/students/{sid}/projects/lesson0/revisions/9", 404)
+    assert instructor.get(f"/api/instructor/students/{sid}/projects/lesson0/revisions/1")["source"] == GOOD
+    instructor.get(f"/api/instructor/students/{sid}/projects/lesson0/revisions/9", 404)
 
 
 def test_running_jobs_are_marked_interrupted_on_restart(env, app, ada):

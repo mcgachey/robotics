@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppShell, Button, Group, Loader, Select, Text, Title, Center } from '@mantine/core';
-import { LoginForm, errorMessage, get, post, type Lesson, type Me } from '@robotics/common';
+import { ColorSchemeToggle, LoginForm, errorMessage, get, post, type Lesson, type Me } from '@robotics/common';
 import { LessonView } from './LessonView';
 
 export function App() {
@@ -56,12 +56,13 @@ function Shell({ me, onLogout }: { me: Me; onLogout: () => void }) {
           <Group>
             <Text size="sm">{me.name}</Text>
             <Button variant="default" size="xs" onClick={logout}>Log out</Button>
+            <ColorSchemeToggle />
           </Group>
         </Group>
       </AppShell.Header>
       <AppShell.Main>
         {error && <Text c="red" p="md">{error}</Text>}
-        {lessons && lessons.length === 0 && <Text p="md">No lessons are available yet. Ask your teacher to enable one.</Text>}
+        {lessons && lessons.length === 0 && <Text p="md">No lessons are available yet. Ask your instructor to enable one.</Text>}
         {lessonId && <LessonView key={lessonId} lessonId={lessonId} />}
       </AppShell.Main>
     </AppShell>

@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
-  <MantineProvider>
+  <MantineProvider defaultColorScheme="auto">
     <Notifications position="top-right" />
     <App />
   </MantineProvider>,

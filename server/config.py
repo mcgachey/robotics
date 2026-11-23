@@ -20,7 +20,7 @@ class Config:
     junit_jar: Path
     hamcrest_jar: Path
     web_ide: Path | None
-    web_teacher: Path | None
+    web_instructor: Path | None
     timeout_sec: int = 30
     max_heap_mb: int = 256
     max_output_kb: int = 256
@@ -83,7 +83,7 @@ def load_config(overrides: dict | None = None) -> Config:
         data_dir=data_dir, lessons_dir=Path(env.get("ROBOTICS_LESSONS_DIR") or (ROOT / "lessons")).resolve(),
         secret_key=key, lib_dir=lib_dir,
         api_jar=api, harness_jar=harness, junit_jar=junit, hamcrest_jar=hamcrest,
-        web_ide=_web_dir(lib_dir, "ide"), web_teacher=_web_dir(lib_dir, "teacher"),
+        web_ide=_web_dir(lib_dir, "ide"), web_instructor=_web_dir(lib_dir, "instructor"),
         timeout_sec=num("BUILD_TIMEOUT_SEC", 30),
         max_heap_mb=num("BUILD_MAX_HEAP_MB", 256),
         max_output_kb=num("BUILD_MAX_OUTPUT_KB", 256),

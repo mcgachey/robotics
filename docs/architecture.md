@@ -9,7 +9,7 @@ Teach middle schoolers Java through robotics, in two phases:
 1. **Phase 1**: Droid Depot toy droids (Disney), controlled over Bluetooth LE through an ESP32 running our firmware.
 2. **Phase 2**: an actual FTC robot, using the same student-facing Java API.
 
-Students write Java in a browser IDE on Chromebooks. A Raspberry Pi 4 hosts everything else. Students build and test their own code independently; the **teacher** decides when code runs on shared hardware.
+Students write Java in a browser IDE on Chromebooks. A Raspberry Pi 4 hosts everything else. Students build and test their own code independently; the **instructor** decides when code runs on shared hardware.
 
 ### Constraints and principles
 
@@ -29,8 +29,8 @@ The Pi runs in one of two modes. This split is core to the architecture, and eve
 | | **Config time** | **Classroom time** |
 |---|---|---|
 | Internet | Available (Pi connected to a normal network) | None. The Pi is on the offline classroom router only |
-| Who | Teacher or admin, at a desk, before or between classes | Students and teacher, during class |
-| Purpose | Pull the code, install and update the OS packages and toolchains, **build** the server and UIs on the Pi, deploy, and verify the install | Serve the IDE and teacher apps, build, test, queue, and (Phase 1) run programs |
+| Who | Instructor or admin, at a desk, before or between classes | Students and instructor, during class |
+| Purpose | Pull the code, install and update the OS packages and toolchains, **build** the server and UIs on the Pi, deploy, and verify the install | Serve the IDE and instructor apps, build, test, queue, and (Phase 1) run programs |
 | Allowed | Package installs, downloads, `apt`, updates, backups pushed off-box | Only what is already on the Pi. No downloads, no package installs, no external calls |
 | Students | Not using the system | Use it |
 
@@ -50,7 +50,7 @@ TODO: how the Pi is connected for config (separate Ethernet uplink vs. temporari
 | Part | Technology |
 |------|------------|
 | Server components (web/API server, build service, hardware queue, coordinator) | **Python 3 with Flask** |
-| Student IDE and teacher interface | **React with Mantine** (TypeScript, built with Vite), served by the Flask server as static files |
+| Student IDE and instructor interface | **React with Mantine** (TypeScript, built with Vite), served by the Flask server as static files |
 | Student API, mocks, lesson tests, and student-code builds | **Java 8** (`javac --release 8` on the Pi's JDK, JUnit 4) |
 | Phase 1 runtime (IoC) | TBD. It must load a student JAR, so it runs on a JVM and is launched by the Python server |
 | Build and deploy pipelines | **Makefiles** in the repo |
@@ -72,7 +72,7 @@ Details for the first phase are in `plans/phase_0/build_server.md`.
 ## 2. System Overview
 
 ```text
- Student Chromebooks          Teacher Chromebook
+ Student Chromebooks          Instructor Chromebook
    (IDE: edit/build/test/      (review, build/test,
          submit)                assign hardware, run)
           \                        /
@@ -82,7 +82,7 @@ Details for the first phase are in `plans/phase_0/build_server.md`.
                       |
  +--------------------------------------------+
  | Raspberry Pi 4                              |
- |  IDE and teacher web apps                   |
+ |  IDE and instructor web apps                   |
  |  Accounts, lessons, workspaces              |
  |  Build/test service                         |
  |  Hardware queue and deployment coordinator  |
@@ -103,11 +103,11 @@ TODO: Pi-to-ESP32 transport, and the deployment path to the FTC robot.
 
 **Phase 2: FTC robot.** Student code runs on the FTC robot using the FTC SDK. A separate FTC-specific build and deploy implementation sits behind the common pipeline. It does not use the Phase 1 runtime.
 
-**Shared:** IDE, accounts, lessons and workspaces, build/test workflow, hardware queue, teacher interface, and the student-facing API.
+**Shared:** IDE, accounts, lessons and workspaces, build/test workflow, hardware queue, instructor interface, and the student-facing API.
 
 ## 4. Network
 
-- **Classroom time**: offline WiFi router; Chromebooks (student and teacher) and the Pi join it.
+- **Classroom time**: offline WiFi router; Chromebooks (student and instructor) and the Pi join it.
 - **Config time**: the Pi is connected to a network with internet instead (see "Pi lifecycle"). Chromebooks are not involved.
 - The Pi serves all web apps and assets (no CDNs), and needs no external services at classroom time.
 - TODO: SSID/security and Chromebook provisioning
@@ -118,7 +118,7 @@ TODO: Pi-to-ESP32 transport, and the deployment path to the FTC robot.
 
 ## 5. Raspberry Pi 4
 
-Hosts: the student IDE and teacher interface, accounts and workspaces, the build/test service, the hardware queue and deployment coordinator, and the Phase 1 runtime. Stores source, artifacts, and logs.
+Hosts: the student IDE and instructor interface, accounts and workspaces, the build/test service, the hardware queue and deployment coordinator, and the Phase 1 runtime. Stores source, artifacts, and logs.
 
 Lifecycle: provisioning, installs, builds, and updates happen at **config time** (internet available). Everything above runs at **classroom time** with no internet (see "Pi lifecycle"). Provisioning is done by `bin/init_rp.sh` on a bare Raspberry Pi OS install, and updates by `bin/update_rp.sh` (see "Implementation stack and delivery").
 
@@ -148,12 +148,12 @@ A minimal browser IDE (React and Mantine, with Monaco bundled locally) with one 
 
 TODO: what Submit requires (successful Build, or passing Test).
 
-## 7. Teacher Interface
+## 7. Instructor Interface
 
-A browser app (React and Mantine) on the Pi, requiring a teacher login.
+A browser app (React and Mantine) on the Pi, requiring an instructor login.
 
 - **Accounts**: create students, reset credentials, enable/disable.
-- **Lessons**: list the lessons defined in the repo, with an enable/disable button for each. Only enabled lessons are available to students. The teacher cannot create or edit lessons here (section 8).
+- **Lessons**: list the lessons defined in the repo, with an enable/disable button for each. Only enabled lessons are available to students. The instructor cannot create or edit lessons here (section 8).
 - **Review**: view students, their projects, source, and build/test status.
 - **Build and Test buttons**: run the same pipeline on a student's submitted code to check it before it goes on hardware.
 - **Hardware queue**: see submissions in order, with the student, lesson, and source revision.
@@ -167,7 +167,7 @@ Students cannot reach any of these functions.
 
 - A **lesson** defines: starter code, tests, the target phase, and the API version.
 - **Lessons are source, not data.** Each lesson is a directory under `lessons/` in the repo (`lessons/<id>/`, holding its metadata, starter code, and tests), reviewed and versioned with the rest of the code. It reaches the Pi through the normal `git pull` and deploy (config time). Nothing in the running system creates or edits a lesson.
-- **Enabled/disabled** is the only lesson state kept at runtime, in the data directory, and it is set by the teacher. A lesson is available to students only while it is enabled. A newly deployed lesson starts disabled. Disabling a lesson hides it from students but deletes nothing: existing projects, builds, and queue entries are kept, and they work again when the lesson is re-enabled.
+- **Enabled/disabled** is the only lesson state kept at runtime, in the data directory, and it is set by the instructor. A lesson is available to students only while it is enabled. A newly deployed lesson starts disabled. Disabling a lesson hides it from students but deletes nothing: existing projects, builds, and queue entries are kept, and they work again when the lesson is re-enabled.
 - A student has one **project** per lesson, created from the lesson's starter on first use. A student can switch between projects and return to earlier work.
 - Each student has a unique ID and their own workspace of projects. Access is enforced server-side.
 - Work persists across browser restarts, Chromebook disconnections, and Pi reboots, and writes are safe against interruption.
@@ -215,7 +215,7 @@ Related projects: `/workspace/droid`, `/workspace/libastromech`.
 One pipeline serves both phases. Phase-specific steps sit behind it, and student builds and deployable artifacts use the same configuration.
 
 ```text
-STUDENT                                TEACHER
+STUDENT                                INSTRUCTOR
 
 edit and auto-save                     review queue
       |                                     |
@@ -243,27 +243,27 @@ Submit --> hardware queue -+--------->      |
 **Submit and queue**
 - Submit adds a student's successful build to the hardware queue, pinned to that revision.
 - One queued submission per student per lesson; resubmitting replaces it.
-- Only the teacher can take a submission off the queue and run it.
+- Only the instructor can take a submission off the queue and run it.
 
 **Deployment**
-- The teacher assigns hardware and starts the run. A hardware device runs only one program at a time.
+- The instructor assigns hardware and starts the run. A hardware device runs only one program at a time.
 - The coordinator calls the Phase 1 or Phase 2 deployment implementation.
 - **Phase 1**: load the student JAR into the Pi runtime and run it against the assigned droid.
 - **Phase 2**: build for FTC and deploy to the robot.
-- Status and logs return to the teacher interface. Deployment history is recorded.
+- Status and logs return to the instructor interface. Deployment history is recorded.
 
 TODO: Phase 2 build toolchain and where it runs, offline dependencies, deployment mechanism, log retrieval.
 TODO: warm compiler vs. fresh `javac` per build, based on Pi latency.
 
 ## 13. Operations and Safety
 
-- **Roles**: student and teacher, enforced server-side. Only teachers assign hardware and run programs.
-- **Hardware safety**: the teacher can always stop a program. A program stops on timeout or if its connection drops. A physical power-off or emergency-stop procedure must be available.
+- **Roles**: student and instructor, enforced server-side. Only instructors assign hardware and run programs.
+- **Hardware safety**: the instructor can always stop a program. A program stops on timeout or if its connection drops. A physical power-off or emergency-stop procedure must be available.
 - **Logging**: logins, administrative actions, deployments, and build errors.
 - **Maintenance**: all updates (Pi OS, toolchains, libraries, our own code via `git pull` and `make deploy`, firmware tooling) are done at config time, never during class. The Pi is disposable: it tracks one branch of the repo, deploys replace the installed app in place, and there is no versioning, rollback, or repair. A bad Pi is re-imaged and re-provisioned with `init_rp.sh`. Setup, teardown, and troubleshooting guides; backup and restore (back up before any config-time change).
 - TODO: emergency-stop requirements
 - TODO: hardware release policy and per-run time limits
-- TODO: teacher login bootstrap and credential policy
+- TODO: instructor login bootstrap and credential policy
 
 ## 14. Next Steps
 
@@ -275,6 +275,6 @@ TODO: warm compiler vs. fresh `javac` per build, based on Pi latency.
 **Milestones**
 1. Student loop: edit, Build, Test, with terminal feedback.
 2. Phase 1 hardware: a submitted JAR runs on a droid through the runtime.
-3. Teacher workflow: accounts, lessons, queue, Build/Test, assign, run, stop.
+3. Instructor workflow: accounts, lessons, queue, Build/Test, assign, run, stop.
 4. Phase 2: FTC build and deploy.
 5. Classroom integration: multiple students, persistence, recovery.

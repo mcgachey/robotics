@@ -36,8 +36,8 @@ export function StudentsTab() {
 
   const load = useCallback(async () => {
     try {
-      setStudents(await get<Student[]>('/api/teacher/students'));
-      setLessons(await get('/api/teacher/lessons'));
+      setStudents(await get<Student[]>('/api/instructor/students'));
+      setLessons(await get('/api/instructor/lessons'));
     } catch (e) {
       notifications.show({ color: 'red', message: errorMessage(e) });
     }
@@ -47,7 +47,7 @@ export function StudentsTab() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await post('/api/teacher/students', form);
+      await post('/api/instructor/students', form);
       setForm({ name: '', username: '', password: '' });
       notifications.show({ color: 'green', message: `Created ${form.username}.` });
       await load();
@@ -58,7 +58,7 @@ export function StudentsTab() {
 
   const toggle = async (s: Student, enabled: boolean) => {
     try {
-      await patch(`/api/teacher/students/${s.id}`, { enabled });
+      await patch(`/api/instructor/students/${s.id}`, { enabled });
       await load();
     } catch (err) {
       notifications.show({ color: 'red', message: errorMessage(err) });
@@ -68,7 +68,7 @@ export function StudentsTab() {
   const resetPw = async () => {
     if (!pwFor) return;
     try {
-      await patch(`/api/teacher/students/${pwFor.id}`, { password: newPw });
+      await patch(`/api/instructor/students/${pwFor.id}`, { password: newPw });
       notifications.show({ color: 'green', message: `New password set for ${pwFor.login}.` });
       setPwFor(null);
       setNewPw('');
@@ -79,7 +79,7 @@ export function StudentsTab() {
 
   const open = async (s: Student, lessonId: string) => {
     try {
-      const r = await get<Review>(`/api/teacher/students/${s.id}/projects/${lessonId}`);
+      const r = await get<Review>(`/api/instructor/students/${s.id}/projects/${lessonId}`);
       setReview(r);
     } catch (err) {
       notifications.show({ color: 'red', message: errorMessage(err) });

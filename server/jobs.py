@@ -29,8 +29,8 @@ class Job:
                  output_cap: int = 262144):
         self.id = job_id
         self.kind = kind            # "build" | "test"
-        self.origin = origin        # "student" | "teacher-verify"
-        self.owner = owner          # student id, or "teacher"
+        self.origin = origin        # "student" | "instructor-verify"
+        self.owner = owner          # student id, or "instructor"
         self.student_id = student_id
         self.lesson_id = lesson_id
         self.revision = revision
@@ -189,7 +189,7 @@ class JobManager:
         except Exception as e:  # never let a worker thread die silently
             log.exception("job %s crashed", job.id)
             job.set_result("failed", "internal", f"Something went wrong inside the server ({type(e).__name__}). "
-                                                 "Tell your teacher.")
+                                                 "Tell your instructor.")
         finally:
             if job.status == "running":
                 job.set_result("failed", "internal", "The job ended without a result.")
