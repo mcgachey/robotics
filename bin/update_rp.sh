@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Routine update: fetch the branch, then deps build test deploy check.
+# Routine update: fetch the branch, then deps build deploy check. Unit tests are skipped here
+# (run them on a dev machine with `make test`); `make check` runs the acceptance test on the deployed system.
 # Config time only. Usage: sudo bin/update_rp.sh [branch]   (default: main)
 # Assumes bin/init_rp.sh already ran with the same branch.
 set -euo pipefail
@@ -30,7 +31,7 @@ main() {
   git reset --hard "origin/$branch"
 
   # 3. Pipelines (Node on PATH for make only; the Makefile also sets it)
-  make deps build test deploy check
+  make deps build deploy check
 }
 
 main "$@"
