@@ -33,8 +33,10 @@ fi
 
 echo "== No external requests in built web apps"
 if [ -d "$PREFIX/app/web" ]; then
+  # Inert strings in bundled libraries: doc/licence links, and @monaco-editor/loader's default CDN path (never
+  # used: the IDE passes the bundled monaco via loader.config({monaco}); confirm in the browser network panel).
   hits=$(grep -rEoh 'https?://[A-Za-z0-9.-]+' "$PREFIX/app/web" 2>/dev/null \
-    | grep -Ev '^https?://(localhost|127\.0\.0\.1|www\.w3\.org|reactjs\.org|react\.dev)' | sort -u | head -20)
+    | grep -Ev '^https?://(localhost|127\.0\.0\.1|www\.w3\.org|reactjs\.org|react\.dev|github\.com|mantine\.dev|code\.visualstudio\.com|microsoft\.com|cdn\.jsdelivr\.net)$' | sort -u | head -20)
   if [ -z "$hits" ]; then ok "no external URLs in $PREFIX/app/web"
   else bad "external URLs in built web apps (review; some may be inert strings):"; echo "$hits" | sed 's/^/        /'; fi
 else
