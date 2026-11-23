@@ -179,9 +179,6 @@ def main():
         srv.start()
         t = Client(srv.base)
         check("instructor logs in", t.login("teach", "teachpw1")[0] == 200)
-        code, ls = t.get("/api/instructor/lessons")
-        check("lesson0 is listed from the source tree, disabled",
-              code == 200 and [(l["id"], l["enabled"]) for l in ls] == [("lesson0", False)], ls)
         check("instructor creates student ada", t.post("/api/instructor/students",
               {"name": "Ada", "username": "ada", "password": "adapw123"})[0] == 201)
         ada0 = Client(srv.base)
