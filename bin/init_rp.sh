@@ -34,7 +34,7 @@ step "Installing apt packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y git make build-essential curl ca-certificates unzip xz-utils \
-  python3 python3-venv python3-pip openjdk-17-jdk-headless procps jq
+  python3 python3-venv python3-pip openjdk-21-jdk-headless procps jq
 
 step "Ensuring at least 1 GB swap"
 swap_kb=$(awk '/SwapTotal/{print $2}' /proc/meminfo)

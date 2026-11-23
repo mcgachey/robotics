@@ -41,7 +41,7 @@ All are installed at config time. Items marked **build** are needed only to comp
 | `build-essential` | Compile any Python wheel that has no arm64 build | build |
 | `curl`, `ca-certificates`, `unzip`, `xz-utils` | Downloads (Node, JUnit jars) and unpacking | build |
 | `python3`, `python3-venv`, `python3-pip` | Server runtime and its virtualenv. Bookworm provides 3.11 | build and run |
-| `openjdk-17-jdk-headless` | `javac` for student code and `java` for tests. See 2.4 | build and run |
+| `openjdk-21-jdk-headless` | `javac` for student code and `java` for tests. See 2.4 | build and run |
 | `procps` | `ps` and `pkill`, for checking orphan processes | run |
 | `jq` | Self-check and acceptance scripts | build and run |
 
@@ -63,12 +63,12 @@ Everything else uses the standard library: `subprocess`, `os.killpg`, `threading
 
 | Item | Requirement | Why |
 |------|-------------|-----|
-| JDK | **OpenJDK 17 (arm64)**, from `apt` | The build service starts `javac` and `java` as child processes. Needs a JDK, not a JRE. |
-| Target level | `javac --release 8` | `--release` exists only on JDK 9 and later, so a Java 8 JDK cannot run the plan's compile command. JDK 17 supports it. |
+| JDK | **OpenJDK 21 (arm64)**, from `apt` | The build service starts `javac` and `java` as child processes. Needs a JDK, not a JRE. |
+| Target level | `javac --release 8` | `--release` exists only on JDK 9 and later, so a Java 8 JDK cannot run the plan's compile command. JDK 21 supports it (Debian 13 "trixie" has no JDK 17). |
 | JUnit | `junit-4.13.2.jar`, `hamcrest-core-1.3.jar` | Downloaded by `make deps` from Maven Central, verified against `deps/checksums.txt`, and copied into the app. |
 | `robotics-api.jar` | Built by `api/Makefile` with `javac --release 8` | `Program`, `Robot`, `MockRobot`, `ProgramRunner` (plan section 3). |
 
-Caveat: student code is compiled for Java 8 but run on JDK 17. If this matters, also unpack a Temurin 8 arm64 JDK (not on `PATH`) at config time and run the Java tests against it once.
+Caveat: student code is compiled for Java 8 but run on JDK 21. If this matters, also unpack a Temurin 8 arm64 JDK (not on `PATH`) at config time and run the Java tests against it once.
 
 ### 2.5 Node (UI build, **build only**)
 
