@@ -159,7 +159,9 @@ def test_deploy_runs_the_built_code_on_the_selected_droid_and_stops_it(teach, ad
     j = teach.wait_job(jid)
     assert j["status"] == "passed", j
     assert j["kind"] == "deploy" and j["boardId"] == DROID
-    assert "driving" in teach.get(f"/api/jobs/{jid}")["output"]
+    out = teach.get(f"/api/jobs/{jid}")["output"]
+    assert "driving" in out
+    assert f"firmware 0.3.0" in out and f"(revision {rev})" in out, out
 
     boards = {b for b, _, _ in controller.cmds()}
     assert boards == {DROID}, "only the selected droid was driven"

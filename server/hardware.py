@@ -131,8 +131,10 @@ class Hardware:
         if not droid["online"]:
             raise HardwareError(f"{droid['name']} is offline. Check its USB cable, then rescan on the controller.", 409)
 
+        who = f"{student.get('name') or sid} (revision {rev})"
+
         def run(job):
-            self._run(job, board_id, jar, meta["className"])
+            self._run(job, board_id, jar, meta["className"], droid, who)
 
         with lock_for(f"hardware:{board_id}"):
             try:
@@ -168,8 +170,10 @@ class Hardware:
                 write_json(self.path, assigned)
 
     # --- the run -----------------------------------------------------------
-    def _run(self, job, board_id: str, jar, class_name: str) -> None:
+    def _run(self, job, board_id: str, jar, class_name: str, droid: dict, who: str) -> None:
         cfg = self.cfg
+        job.emit("status", f"Droid board {droid['name']}: firmware {droid.get('firmware') or 'unknown'}. "
+                           f"About to run {who}'s code.")
         job.emit("status", f"Running {class_name} (revision {job.revision}) on the droid, "
                            f"for at most {cfg.deploy_max_sec} seconds")
         cmd = [cfg.java] + self.service._jvm_flags() + [
