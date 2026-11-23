@@ -38,6 +38,9 @@ class Lessons:
         for k in ("targetPhase", "apiVersion"):
             if not isinstance(m.get(k), int) or isinstance(m.get(k), bool):
                 return f"{k} must be a whole number"
+        t = m.get("timeout")
+        if t is not None and (isinstance(t, bool) or not isinstance(t, (int, float)) or not 0 < t < 3600):
+            return "timeout must be a number of seconds greater than 0"
         if not (d / "starter" / f"{m['className']}.java").is_file():
             return f"missing starter/{m['className']}.java"
         if not (d / "tests" / f"{m['className']}Test.java").is_file():

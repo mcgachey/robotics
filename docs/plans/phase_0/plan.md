@@ -129,7 +129,7 @@ Lessons are defined in the source tree and checked into git. Lesson 0 is already
 
 ```text
 lessons/<lessonId>/
-  lesson.json                       # id, title, className, targetPhase (1 for now, unused), apiVersion
+  lesson.json                       # id, title, className, targetPhase (1 for now, unused), apiVersion, optional timeout (seconds the student code may run before it is killed; default is the server limit)
   starter/HelloWorld.java
   tests/HelloWorldTest.java
 ```

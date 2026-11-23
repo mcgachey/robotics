@@ -105,3 +105,12 @@ def test_robot_log_messages_are_captured_separately_from_stdout(run, lesson):
     j = run(GOOD.replace('robot.log("Hello, world!");', 'robot.log("Hello, world!"); System.out.println("from student");'))
     assert j.robot_log == "Hello, world!\n"
     assert "Hello, world!" not in j.program_output
+
+
+def test_lesson_timeout_overrides_server_default(app, run, lesson, monkeypatch):
+    real = app.robotics.lessons.meta
+    monkeypatch.setattr(app.robotics.lessons, "meta", lambda lid: {**real(lid), "timeout": 2})
+    t0 = time.time()
+    j = run(INFINITE)
+    assert j.reason == "timeout" and "more than 2 seconds" in j.message
+    assert time.time() - t0 < 10 and app.robotics.cfg.timeout_sec > 2

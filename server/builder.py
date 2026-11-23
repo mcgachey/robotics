@@ -49,8 +49,8 @@ class BuildService:
         self._test(job, lesson, jar)
 
     # --- helpers ---------------------------------------------------------
-    def _limits(self) -> tuple[int, int]:
-        return self.cfg.timeout_sec, self.cfg.max_output_kb * 1024
+    def _limits(self, timeout: float | None = None) -> tuple[float, int]:
+        return (timeout or self.cfg.timeout_sec), self.cfg.max_output_kb * 1024
 
     def _jvm_flags(self) -> list[str]:
         return [f"-Xmx{self.cfg.max_heap_mb}m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Xshare:auto",
@@ -67,14 +67,15 @@ class BuildService:
         job.set_result("cancelled", "cancelled", "Stopped.")
         job.emit("status", job.message)
 
-    def _killed(self, job: Job, r: ProcResult, what: str) -> bool:
+    def _killed(self, job: Job, r: ProcResult, what: str, limit: float | None = None) -> bool:
         """Turn a killed child into a friendly result. True if it was killed."""
         if r.cancelled:
             self._cancelled(job)
         elif r.timed_out:
-            job.set_result("failed", "timeout", f"Your program ran too long (more than {self.cfg.timeout_sec} seconds) "
+            secs = f"{limit or self.cfg.timeout_sec:g}"
+            job.set_result("failed", "timeout", f"Your program ran too long (more than {secs} seconds) "
                            f"and was stopped. Is there a loop that never ends?" if what == "tests" else
-                           f"The compiler ran too long (more than {self.cfg.timeout_sec} seconds) and was stopped.")
+                           f"The compiler ran too long (more than {secs} seconds) and was stopped.")
         elif r.output_exceeded:
             job.set_result("failed", "output_limit", "Your program printed too much text and was stopped. "
                            "Is something printing inside a loop that never ends?")
@@ -188,7 +189,9 @@ class BuildService:
         results.unlink(missing_ok=True)
         robot_log = job.dir / "robot.log"
         robot_log.unlink(missing_ok=True)
-        timeout, cap = self._limits()
+        # lesson.json may set "timeout" (seconds) for how long the student's code may run
+        lesson_timeout = lesson.get("timeout")
+        timeout, cap = self._limits(lesson_timeout)
         cp = os.pathsep.join([str(tests_out), str(self.cfg.harness_jar), libs])
         cmd = [self.cfg.java] + self._jvm_flags() + ["-XX:+ExitOnOutOfMemoryError", "-Djava.awt.headless=true",
                f"-Drobotics.logFile={robot_log}", "-cp", cp, "robotics.harness.JUnitHarness", str(results), self.lessons.test_class(lesson)]
@@ -200,7 +203,7 @@ class BuildService:
             job.robot_log = robot_log.read_text("utf-8", "replace")[: cap]
         except FileNotFoundError:
             job.robot_log = ""
-        if self._killed(job, r, "tests"):
+        if self._killed(job, r, "tests", lesson_timeout):
             return
         try:
             job.tests = json.loads(results.read_text("utf-8"))
