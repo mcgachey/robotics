@@ -1,0 +1,18 @@
+[Unit]
+Description=Robotics classroom server (Flask under gunicorn)
+After=local-fs.target
+
+[Service]
+User=robotics
+Group=robotics
+WorkingDirectory=/opt/robotics/app
+EnvironmentFile=/etc/robotics/server.env
+# One worker (job state is in memory), several threads.
+ExecStart=/opt/robotics/venv/bin/gunicorn --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:${PORT} "server.app:create_app()"
+Restart=on-failure
+RestartSec=2
+# Stop kills the whole cgroup, including any child JVMs.
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

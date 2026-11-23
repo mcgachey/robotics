@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Install build output into $PREFIX/app, update the venv, restart the service, smoke-check.
+# Called by `make deploy`. Config time only (pip may download).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+PREFIX=${PREFIX:-/opt/robotics}
+ETC=${ETC:-/etc/robotics}
+APP=$PREFIX/app
+NEW=$APP.new
+CACHE=.deps-cache
+
+[ -d "$PREFIX" ] || { echo "$PREFIX missing: run bin/init_rp.sh first" >&2; exit 1; }
+
+# Python environment (one venv). Create if missing, then install pinned requirements.
+[ -x "$PREFIX/venv/bin/pip" ] || python3 -m venv "$PREFIX/venv"
+if [ -f server/requirements.txt ]; then
+  "$PREFIX/venv/bin/pip" install --require-hashes -r server/requirements.txt
+else
+  echo "WARNING: server/requirements.txt not present; venv not updated"
+fi
+
+# Assemble the new app tree beside the old one, then swap.
+rm -rf "$NEW"; mkdir -p "$NEW/web" "$NEW/lib"
+copy() { # copy <src> <dest>; warn if the source is absent
+  if [ -e "$1" ]; then cp -a "$1" "$2"; else echo "WARNING: $1 not present; not deployed"; fi
+}
+copy server "$NEW/server"
+copy web/ide/dist "$NEW/web/ide"
+copy web/teacher/dist "$NEW/web/teacher"
+copy api/build/robotics-api.jar "$NEW/robotics-api.jar"
+copy "$CACHE/junit-4.13.2.jar" "$NEW/junit-4.13.2.jar"
+copy "$CACHE/hamcrest-core-1.3.jar" "$NEW/hamcrest-core-1.3.jar"
+copy lessons "$NEW/lessons"
+copy scripts "$NEW/scripts"
+find "$NEW" -name __pycache__ -prune -exec rm -rf {} +
+chown -R root:root "$NEW"; chmod -R a+rX,go-w "$NEW"
+
+rm -rf "$APP.old"
+[ -d "$APP" ] && mv "$APP" "$APP.old"
+mv "$NEW" "$APP"
+rm -rf "$APP.old"
+
+systemctl daemon-reload
+systemctl restart robotics
+
+# Smoke check: the server must answer on localhost.
+PORT=8080
+if [ -r "$ETC/server.env" ]; then PORT=$(. "$ETC/server.env"; echo "${PORT:-8080}"); fi
+for _ in $(seq 1 20); do
+  if curl -s --max-time 3 -o /dev/null "http://127.0.0.1:$PORT/"; then
+    echo "deploy ok: server answering on port $PORT"; exit 0
+  fi
+  sleep 1
+done
+echo "deploy FAILED: server not answering on port $PORT" >&2
+journalctl -u robotics -n 30 --no-pager >&2 || true
+exit 1
