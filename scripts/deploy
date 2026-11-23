@@ -41,6 +41,13 @@ mv "$NEW" "$APP"
 rm -rf "$APP.old"
 
 systemctl daemon-reload
+# Components not on this branch yet (early phase 0): nothing to run, so don't
+# start the service (it would crash-loop) and don't smoke-check.
+if [ ! -d "$APP/server" ] || [ ! -x "$PREFIX/venv/bin/gunicorn" ]; then
+  systemctl stop robotics 2>/dev/null || true
+  echo "deploy: server app or gunicorn not installed on this branch; service left stopped, smoke check skipped"
+  exit 0
+fi
 systemctl restart robotics
 
 # Smoke check: the server must answer on localhost.

@@ -63,7 +63,8 @@ bootstrap-teacher:
 
 # Copy lessons/lesson0 into the data directory. Never overwrites an existing lesson.
 seed-lesson0:
-	@if [ -e $(DATA)/lessons/lesson0 ]; then echo "lesson0 already present; leaving it"; else \
+	@if [ ! -d $(APP)/lessons/lesson0 ]; then echo "no lessons/lesson0 in this build; skipping seed"; \
+	elif [ -e $(DATA)/lessons/lesson0 ]; then echo "lesson0 already present; leaving it"; else \
 	  install -d -o robotics -g robotics $(DATA)/lessons && \
 	  cp -a $(APP)/lessons/lesson0 $(DATA)/lessons/lesson0 && \
 	  chown -R robotics:robotics $(DATA)/lessons/lesson0 && echo "seeded lesson0"; fi

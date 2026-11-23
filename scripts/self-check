@@ -23,9 +23,13 @@ run "javac --release 8" javac --release 8 -version
 run "python3 --version" python3 --version
 
 echo "== Service"
+if [ ! -d "$PREFIX/app/server" ]; then
+  warn "$PREFIX/app/server not present (server not built on this branch yet); service checks skipped"
+else
 if systemctl is-active --quiet robotics; then ok "robotics.service active"; else bad "robotics.service not active"; fi
 if curl -s --max-time 5 -o /dev/null "http://127.0.0.1:$PORT/"; then ok "HTTP answers on :$PORT (--max-time 5)"
 else bad "no HTTP answer on :$PORT within 5s"; fi
+fi
 
 echo "== No external requests in built web apps"
 if [ -d "$PREFIX/app/web" ]; then
