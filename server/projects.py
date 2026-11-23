@@ -117,6 +117,33 @@ class Projects:
                 pj["goodBuilds"][str(job.revision)] = job.id
             write_json(self.dir(sid, lid) / "project.json", pj)
 
+    def record_build(self, job) -> None:
+        """Called when an instructor job finishes: remember its successful build of this revision (so it can
+        be reused and deployed) without touching the student's own build/test status."""
+        if not job.compiled:
+            return
+        sid, lid = job.student_id, job.lesson_id
+        with self._lock(sid, lid):
+            pj = self.open(sid, lid)
+            pj["goodBuilds"].setdefault(str(job.revision), job.id)
+            write_json(self.dir(sid, lid) / "project.json", pj)
+
+    def deployable(self, sid: str) -> list[dict]:
+        """Every revision of the student's projects that has a built artifact, newest build first."""
+        out = []
+        d = self.workspaces / sid
+        for p in sorted(d.iterdir()) if d.is_dir() else []:
+            pj = read_json(p / "project.json")
+            if not pj:
+                continue
+            for rev, bid in pj["goodBuilds"].items():
+                jar = self.builds / bid / "artifact.jar"
+                if valid_id(bid) and jar.exists():
+                    out.append({"lessonId": pj["lessonId"], "className": pj["className"], "revision": int(rev),
+                                "buildId": bid, "builtAt": int(jar.stat().st_mtime)})
+        out.sort(key=lambda e: (-e["builtAt"], e["lessonId"], -e["revision"]))
+        return out
+
     def state(self, sid: str, lid: str) -> dict:
         pj = self.open(sid, lid)
         return {

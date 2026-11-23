@@ -22,6 +22,7 @@ describe('format', () => {
     expect(statusColor({ status: 'passed' }, false)).toBe('green');
     expect(statusColor({ status: 'passed' }, true)).toBe('blue');
     expect(kindLabel({ kind: 'test', origin: 'instructor-verify' })).toBe('Test (instructor check)');
+    expect(kindLabel({ kind: 'deploy', origin: 'instructor-deploy' })).toBe('Droid run');
   });
 });
 

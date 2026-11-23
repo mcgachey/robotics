@@ -31,6 +31,15 @@ if curl -s --max-time 5 -o /dev/null "http://127.0.0.1:$PORT/"; then ok "HTTP an
 else bad "no HTTP answer on :$PORT within 5s"; fi
 fi
 
+echo "== Board controller"
+if [ -d "$PREFIX/app/controller" ]; then
+  CPORT=5050; [ -r "$ETC/controller.env" ] && CPORT=$(. "$ETC/controller.env"; echo "${PORT:-5050}")
+  if systemctl is-active --quiet robotics-controller; then ok "robotics-controller.service active"; else bad "robotics-controller.service not active"; fi
+  if curl -s --max-time 5 -o /dev/null "http://127.0.0.1:$CPORT/api/boards"; then ok "controller answers on :$CPORT"; else bad "controller not answering on :$CPORT"; fi
+else
+  warn "$PREFIX/app/controller not present; controller checks skipped"
+fi
+
 echo "== No external requests in built web apps"
 if [ -d "$PREFIX/app/web" ]; then
   # Inert strings in bundled libraries: doc/licence links, and @monaco-editor/loader's default CDN path (never

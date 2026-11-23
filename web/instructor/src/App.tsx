@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppShell, Button, Center, Container, Group, Loader, Tabs, Text, Title } from '@mantine/core';
 import { ColorSchemeToggle, LoginForm, get, post, type Me } from '@robotics/common';
+import { HardwareTab } from './HardwareTab';
 import { LessonsTab } from './LessonsTab';
 import { QueueTab } from './QueueTab';
 import { StudentsTab } from './StudentsTab';
@@ -37,10 +38,12 @@ export function App() {
               <Tabs.Tab value="queue">Queue</Tabs.Tab>
               <Tabs.Tab value="students">Students</Tabs.Tab>
               <Tabs.Tab value="lessons">Lessons</Tabs.Tab>
+              <Tabs.Tab value="hardware">Hardware</Tabs.Tab>
             </Tabs.List>
             <Tabs.Panel value="queue"><QueueTab /></Tabs.Panel>
             <Tabs.Panel value="students"><StudentsTab /></Tabs.Panel>
             <Tabs.Panel value="lessons"><LessonsTab /></Tabs.Panel>
+            <Tabs.Panel value="hardware"><HardwareTab /></Tabs.Panel>
           </Tabs>
         </Container>
       </AppShell.Main>

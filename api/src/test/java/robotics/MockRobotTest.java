@@ -14,6 +14,17 @@ public class MockRobotTest {
         assertEquals(Arrays.asList("a", "b"), r.messages());
     }
 
+    @Test public void recordsHeadAndBeep() {
+        MockRobot r = new MockRobot();
+        r.rotateHead(-1);
+        r.centerHead();
+        r.beep(5);
+        assertEquals(Arrays.asList(-1), r.headRotations());
+        assertEquals(1, r.centerCount());
+        assertEquals(1, r.beepCount());
+        assertEquals(Arrays.asList(5), r.beepSounds());
+    }
+
     @Test public void messagesIsASnapshot() {
         MockRobot r = new MockRobot();
         r.log("a");

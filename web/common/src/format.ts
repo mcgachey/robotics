@@ -36,6 +36,7 @@ export function durationLabel(job: Pick<Job, 'durations'>): string {
 }
 
 export function kindLabel(job: Pick<Job, 'kind' | 'origin'>): string {
+  if (job.kind === 'deploy') return 'Droid run';
   const k = job.kind === 'build' ? 'Build' : 'Test';
   return job.origin === 'instructor-verify' ? `${k} (instructor check)` : k;
 }

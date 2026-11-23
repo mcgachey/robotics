@@ -28,9 +28,10 @@ public final class ProgramRunner {
             System.exit(2);
         }
         Program p = load(args[0], Thread.currentThread().getContextClassLoader());
-        run(p, new Robot() {
+        run(p, new MockRobot() {
             @Override
             public void log(String message) {
+                super.log(message);
                 System.out.println(message);
             }
         });

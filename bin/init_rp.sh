@@ -71,6 +71,8 @@ fi
 # 4. User, directories, config
 step "User, directories, config"
 id robotics >/dev/null 2>&1 || useradd --system --home-dir "$PREFIX" --shell /usr/sbin/nologin robotics
+usermod -aG dialout robotics   # serial access to ESP32 boards (controller service)
+getent group bluetooth >/dev/null && usermod -aG bluetooth robotics || true
 install -d -o root -g root "$PREFIX"
 install -d -o robotics -g robotics -m 750 "$DATA"
 install -d -o root -g root -m 755 "$ETC"
@@ -97,6 +99,8 @@ step "systemd unit"
 install -m 644 "$REPO/systemd/robotics.service" /etc/systemd/system/robotics.service
 systemctl daemon-reload
 systemctl enable robotics.service
+install -m 644 "$REPO/systemd/robotics-controller.service" /etc/systemd/system/robotics-controller.service
+systemctl enable robotics-controller.service
 
 step "Keeping the Pi quiet at classroom time"
 for unit in apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service \

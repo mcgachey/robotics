@@ -26,8 +26,10 @@ export type JobStatus = 'running' | 'passed' | 'failed' | 'cancelled';
 
 export interface Job {
   id: string;
-  kind: 'build' | 'test';
-  origin: 'student' | 'instructor-verify';
+  kind: 'build' | 'test' | 'deploy';
+  origin: 'student' | 'instructor-verify' | 'instructor-deploy';
+  /** Deploy jobs: the droid board the program ran on. */
+  boardId?: string;
   studentId: string;
   lessonId: string;
   revision: number;
@@ -94,4 +96,45 @@ export interface QueueEntry {
   buildId: string;
   revision: number;
   submittedAt: string;
+}
+
+export interface HardwareBuild {
+  lessonId: string;
+  lessonTitle: string;
+  className: string;
+  revision: number;
+  buildId: string;
+  builtAt: number;
+}
+
+export interface HardwareStudent {
+  id: string;
+  name: string;
+  login: string;
+  /** Revisions with a built artifact, most recently built first. */
+  builds: HardwareBuild[];
+}
+
+export interface HardwareDroid {
+  id: string;
+  name: string;
+  online: boolean;
+  port: string;
+  firmware: string;
+  assignment: {
+    studentId: string;
+    studentName: string;
+    lessonId: string;
+    lessonTitle: string;
+    revision: number;
+    jobId: string;
+    assignedAt: string;
+  } | null;
+  run: { jobId: string; startedAt: string } | null;
+}
+
+export interface Hardware {
+  controller: { ok: boolean; url: string; error: string };
+  droids: HardwareDroid[];
+  students: HardwareStudent[];
 }

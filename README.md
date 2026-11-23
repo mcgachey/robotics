@@ -12,6 +12,7 @@ Plans: `docs/plans/phase_0/` (`plan.md`, `build_server.md`).
 | `web/` | npm workspaces: `common`, `ide` (student, Monaco), `instructor` |
 | `lessons/lesson0/` | Hello World lesson: `lesson.json`, `starter/`, `tests/` |
 | `scripts/` | `deploy`, `self-check`, `acceptance-test` |
+| `deps/astromech.env` | Pinned `astromech_server` commit; `scripts/controller-build` fetches it and builds the ESP32 board controller (UI on port 5050, service `robotics-controller`) |
 | `bin/` | `init_rp.sh`, `update_rp.sh` (Pi provisioning) |
 
 ## Develop on a laptop
@@ -32,6 +33,17 @@ make run PREFIX=$PWD/.local
 
 Create students and lessons in the instructor page (Lesson 0 can be pasted from `lessons/lesson0`).
 Web dev server with hot reload: `cd web/ide && npx vite` (proxies `/api` to port 5000).
+
+## Running student code on a droid
+
+The instructor page's **Hardware** tab lists the droid boards the Pi's board controller (`CONTROLLER_URL`, default
+`http://127.0.0.1:5050`) knows about. Each droid has zero or one assigned program: pick a student, pick one of their
+built revisions (latest first), press **Deploy**. The server runs that build in its own JVM (`robotics.DeployRunner`,
+at most `DEPLOY_MAX_SEC`, default 600 s) whose `DroidRobot` drives that one board through the controller's loopback-only
+`motor` / `rotate_head` / `stop` commands. **Stop** kills the run, and a stop is always sent to the droid afterwards.
+Output streams to the tab like a build's. Any successful build of a revision (the student's or the instructor's) can be
+deployed. This needs the droid firmware and controller from astromech_server with the `motor` and `rotate_head`
+commands; bump `deps/astromech.env` to a commit that has them and reflash the boards.
 
 ## On the Pi
 
